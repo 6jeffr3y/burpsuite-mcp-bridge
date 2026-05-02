@@ -1,0 +1,7 @@
+BurpSuite MCP Bridge
+
+Distribution notes:
+- review homepage / repository / support URLs before public release
+- review organization branding and contact information
+- verify the default bridge and MCP ports match your target release environment
+- verify Python runtime availability for the MCP startup scripts

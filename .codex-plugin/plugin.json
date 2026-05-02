@@ -1,0 +1,45 @@
+{
+  "name": "burpsuite-mcp-bridge",
+  "version": "1.0.0",
+  "description": "Production-oriented Burp Suite MCP bridge for proxy traffic triage, replay, logger-like tool capture, and request/response automation across WSL and Windows clients.",
+  "author": {
+    "name": "BurpSuite MCP Bridge",
+    "email": "support@example.invalid",
+    "url": "https://github.com/your-org/burpsuite-mcp-bridge-release"
+  },
+  "homepage": "https://github.com/your-org/burpsuite-mcp-bridge-release",
+  "repository": "https://github.com/your-org/burpsuite-mcp-bridge-release",
+  "license": "Proprietary Runtime Distribution",
+  "keywords": [
+    "burp",
+    "mcp",
+    "codex",
+    "wsl",
+    "windows",
+    "montoya",
+    "proxy",
+    "agent-ai"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "BurpSuite MCP Bridge",
+    "shortDescription": "Bridge Burp Suite traffic, replay, and rewrite workflows into MCP clients and IDEs",
+    "longDescription": "Expose Burp Suite proxy and internal HTTP tool traffic to MCP clients over standard transports. Supports low-noise polling, history search, replay with request mutation, request/response rewrite rules, Repeater handoff, logger-like capture, and exportable evidence across WSL and Windows setups.",
+    "developerName": "BurpSuite MCP Bridge",
+    "category": "Coding",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/your-org/burpsuite-mcp-bridge-release",
+    "brandColor": "#f97316",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg",
+    "defaultPrompt": [
+      "Use BurpSuite MCP Bridge to summarize recent proxy traffic and identify the login chain.",
+      "Use BurpSuite MCP Bridge to inspect Burp history for upload endpoints and replay a candidate request with a harmless header mutation.",
+      "Use BurpSuite MCP Bridge to export the exact request/response pair that proves a finding, then create a temporary response rewrite rule for verification."
+    ]
+  }
+}

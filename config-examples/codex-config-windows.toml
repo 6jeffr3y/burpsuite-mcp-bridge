@@ -1,0 +1,6 @@
+[mcp_servers.burpsuite-mcp-bridge]
+command = "powershell"
+args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\path\\to\\burpsuite-mcp-bridge-release\\scripts\\run_windows_mcp.ps1"]
+
+[mcp_servers.burpsuite-mcp-bridge.env]
+BURP_MCP_BRIDGE_PORT = "9639"

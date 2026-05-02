@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "burpsuite-mcp-bridge": {
+      "command": "bash",
+      "args": [
+        "./scripts/run_wsl_mcp.sh"
+      ]
+    }
+  }
+}
