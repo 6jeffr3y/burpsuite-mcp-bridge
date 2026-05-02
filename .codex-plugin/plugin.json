@@ -5,10 +5,10 @@
   "author": {
     "name": "BurpSuite MCP Bridge",
     "email": "support@example.invalid",
-    "url": "https://github.com/your-org/burpsuite-mcp-bridge-release"
+    "url": "https://github.com/6jeffr3y/burpsuite-mcp-bridge"
   },
-  "homepage": "https://github.com/your-org/burpsuite-mcp-bridge-release",
-  "repository": "https://github.com/your-org/burpsuite-mcp-bridge-release",
+  "homepage": "https://github.com/6jeffr3y/burpsuite-mcp-bridge",
+  "repository": "https://github.com/6jeffr3y/burpsuite-mcp-bridge",
   "license": "Proprietary Runtime Distribution",
   "keywords": [
     "burp",
@@ -32,7 +32,7 @@
       "Write",
       "Interactive"
     ],
-    "websiteURL": "https://github.com/your-org/burpsuite-mcp-bridge-release",
+    "websiteURL": "https://github.com/6jeffr3y/burpsuite-mcp-bridge",
     "brandColor": "#f97316",
     "composerIcon": "./assets/icon.svg",
     "logo": "./assets/logo.svg",
