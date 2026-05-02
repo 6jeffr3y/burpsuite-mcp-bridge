@@ -1,5 +1,7 @@
 # BurpSuite MCP Bridge
 
+English | [简体中文](./README_CN.md)
+
 **Simple MCP connectivity for Windows Burp Suite, WSL, Agent-AI, Codex, MCP CLI, and IDE workflows.**
 
 BurpSuite MCP Bridge is built for the real-world case where Burp runs on Windows while AI agents, CLIs, and IDEs need fast, low-noise access to traffic, replay, and automation features — without fighting cross-environment setup.

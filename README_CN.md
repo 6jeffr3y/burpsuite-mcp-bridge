@@ -1,5 +1,7 @@
 # BurpSuite MCP Bridge
 
+[English](./README.md) | 简体中文
+
 **让 Windows Burp Suite 与 WSL / Windows Agent-AI / Codex / MCP CLI / IDE 进行简单配置即可通信。**
 
 BurpSuite MCP Bridge 面向真实使用场景设计：Burp 跑在 Windows，而 AI Agent、CLI、IDE 或 Codex 需要快速、低噪声地读取流量、执行改包重放，并进行自动化联调。
