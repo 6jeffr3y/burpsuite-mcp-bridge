@@ -306,6 +306,20 @@ url = "http://127.0.0.1:9640/mcp"
 
 ---
 
+## 反馈与社区
+
+欢迎提交 Issues、兼容性反馈和改进建议。无论是 bridge 连通问题、MCP 传输方式适配、Burp 版本兼容性，还是你觉得对 Agent-AI 很有价值的工作流建议，都可以直接提 issue。
+
+建议在反馈时附带这些信息：
+
+- Burp 版本
+- 使用的 MCP 传输方式（`stdio` 或 `Streamable HTTP`）
+- 客户端类型（`Codex`、IDE、CLI、agent framework 等）
+- 触发问题的是 Proxy 流量还是内部 logger-like 流量
+- 最小可复现步骤
+
+---
+
 ## 已验证基线
 
 - Burp Suite Professional `2025.10.3`

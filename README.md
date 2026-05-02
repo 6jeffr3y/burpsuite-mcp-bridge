@@ -306,6 +306,20 @@ Recommended first checks from the client side:
 
 ---
 
+## Feedback and community
+
+Issues and improvement suggestions are welcome. If you hit a bridge problem, transport mismatch, Burp compatibility issue, or a useful Agent-AI workflow idea, feel free to open an issue.
+
+When reporting problems, it helps to include:
+
+- Burp version
+- MCP transport used (`stdio` or `Streamable HTTP`)
+- client type (`Codex`, IDE, CLI, agent framework, etc.)
+- whether the target flow was Proxy traffic or internal logger-like traffic
+- the smallest reproducible setup
+
+---
+
 ## Tested baseline
 
 - Burp Suite Professional `2025.10.3`
