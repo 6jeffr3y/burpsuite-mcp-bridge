@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2.0.1
+
+### 修复与增强
+- `burp_replay_flow` / `burp_rule_upsert` 的 `body` 参数兼容 JSON object/list，MCP 层会自动序列化为字符串，避免 AI 传对象时触发 Pydantic string 校验错误。
+- `history/live/logger/selection` 搜索新增时间窗口过滤。
+- `burp_history_search` 新增 `time_from`、`time_to`、`sort=newest|oldest`。
+- `burp_live_poll`、`burp_logger_poll`、`burp_selection_poll` 新增 `created_from`、`created_to`、`sort=updated_asc|updated_desc|newest|oldest`。
+- `burp_target_overview`、`burp_marked_flows` 新增 `time_from`、`time_to`，便于按一次测试窗口收敛目标流量。
+
 ## 2.0
 
 ### 重点更新

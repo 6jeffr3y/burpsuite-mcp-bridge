@@ -1,7 +1,7 @@
 # BurpSuite MCP Bridge
 
 > 面向 Burp Suite 与 Codex / Agent AI / MCP 客户端的本地桥接插件。
-> 当前发布版本：**v2.0**；测试基线：**Burp Suite Professional 2026.4.2**；编译基线继续保持 `montoya-api 2025.10`，新能力按运行时检测启用。
+> 当前发布版本：**v2.0.1**；测试基线：**Burp Suite Professional 2026.4.2**；编译基线继续保持 `montoya-api 2025.10`，新能力按运行时检测启用。
 
 BurpSuite MCP Bridge 的目标不是把 Burp UI 完整搬到 AI 上，而是给 AI 一个稳定、低噪声、可复现的统一接口：
 
@@ -42,13 +42,23 @@ v2.0 已对应新语义：
 ignoreStaticMode = response-noisy-assets-only; requests kept; js/source-map/wasm kept
 ```
 
-### 3. 目标视角与人工标记利用
+
+### 3. 时间窗口搜索 / 排序
+
+v2.0.1 增加时间字段相关操作，适合限定“刚才这一波测试”：
+
+- `burp_history_search`：支持 `time_from`、`time_to`、`sort=newest|oldest`，按 Burp History 的 `time` 过滤；
+- `burp_live_poll` / `burp_logger_poll` / `burp_selection_poll`：支持 `created_from`、`created_to`，按 MCP buffer 的 `createdAt` 过滤；
+- `burp_target_overview` / `burp_marked_flows`：支持 `time_from`、`time_to`，会自动映射到 history time 与 live/logger/selection createdAt；
+- 时间值支持 epoch seconds、epoch milliseconds 或 ISO-8601，例如 `2026-06-06T10:00:00Z`。
+
+### 4. 目标视角与人工标记利用
 
 - `burp_target_overview(host=...)`：按 host 聚合 live/history/logger/selection 的高价值候选请求。
 - `burp_marked_flows(host=...)`：读取指定 host 下带注释或高亮颜色的流量索引，适合快速定位 Burp 中人工标记、插件标记或 AI 前一次标记的关键包。
 - 支持从注释中提取 LinkFinder、Sensitive Field、Source Map、Email、Router Push 等信号并参与排序。
 
-### 4. Burp 2026.4.x 官方能力接入
+### 5. Burp 2026.4.x 官方能力接入
 
 保持 2025.10 编译基线，运行在 2026.4.x 时自动检测并启用：
 
@@ -57,7 +67,7 @@ ignoreStaticMode = response-noisy-assets-only; requests kept; js/source-map/wasm
 - BCheck 导入：把 AI 生成或本地文件中的 BCheck 交给 Burp Scanner 官方流程执行；
 - Bambda 导入：把 AI 生成或本地文件中的 Bambda 脚本导入 Burp Bambda Library，由 Burp UI 管理和执行。
 
-### 5. Rewrite Rule 自动化更安全
+### 6. Rewrite Rule 自动化更安全
 
 - 支持 `modify`、`drop`、`spoof` 三类动作；
 - 支持 `proxy`、`tool`、`all` 三类作用面；
@@ -105,6 +115,7 @@ flowchart TD
 
 ```text
 burp-plugin/
+  burpsuite-mcp-bridge-2.0.1-all.jar
   burpsuite-mcp-bridge-2.0-all.jar
   burpsuite-mcp-bridge-latest.jar
 wsl-mcp/

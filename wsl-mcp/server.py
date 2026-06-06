@@ -407,6 +407,26 @@ def _flow_has_mark(item: dict[str, Any]) -> bool:
     return False
 
 
+def _body_to_string(body: Any) -> str | None:
+    """Normalize MCP body input before forwarding it to the Burp bridge.
+
+    LLM clients often supply JSON request bodies as objects even when the tool
+    description says "string". The Java bridge intentionally expects a string
+    for body replacement, so accept JSON-compatible values at the MCP boundary
+    and serialize them here.
+    """
+    if body is None:
+        return None
+    if isinstance(body, str):
+        return body
+    if isinstance(body, bytes):
+        return body.decode("utf-8", errors="replace")
+    try:
+        return json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+    except TypeError as exc:
+        raise ValueError("body 必须是字符串，或可 JSON 序列化的对象/数组/数值") from exc
+
+
 def _edits_payload(
     method: str | None = None,
     path: str | None = None,
@@ -416,7 +436,7 @@ def _edits_payload(
     headers: dict[str, str] | None = None,
     add_headers: dict[str, str] | None = None,
     remove_headers: list[str] | None = None,
-    body: str | None = None,
+    body: Any | None = None,
     path_replace_from: str | None = None,
     path_replace_to: str | None = None,
     body_replace_from: str | None = None,
@@ -436,7 +456,7 @@ def _edits_payload(
         "headers": headers,
         "addHeaders": add_headers,
         "removeHeaders": remove_headers,
-        "body": body,
+        "body": _body_to_string(body),
         "pathReplaceFrom": path_replace_from,
         "pathReplaceTo": path_replace_to,
         "bodyReplaceFrom": body_replace_from,
@@ -468,6 +488,9 @@ def burp_live_poll(
     method: str | None = None,
     has_response: bool | None = None,
     in_scope: bool | None = None,
+    created_from: Any | None = None,
+    created_to: Any | None = None,
+    sort: str | None = None,
     include_bodies: bool = False,
     compact: bool = True,
 ) -> dict[str, Any]:
@@ -483,6 +506,9 @@ def burp_live_poll(
             "method": method,
             "hasResponse": has_response,
             "inScope": in_scope,
+            "createdFrom": created_from,
+            "createdTo": created_to,
+            "sort": sort,
             "includeBodies": include_bodies,
         },
     )
@@ -516,6 +542,9 @@ def burp_logger_poll(
     tool_type: str | None = None,
     has_response: bool | None = None,
     in_scope: bool | None = None,
+    created_from: Any | None = None,
+    created_to: Any | None = None,
+    sort: str | None = None,
     include_bodies: bool = False,
     compact: bool = True,
 ) -> dict[str, Any]:
@@ -532,6 +561,9 @@ def burp_logger_poll(
             "toolType": tool_type,
             "hasResponse": has_response,
             "inScope": in_scope,
+            "createdFrom": created_from,
+            "createdTo": created_to,
+            "sort": sort,
             "includeBodies": include_bodies,
         },
     )
@@ -553,6 +585,9 @@ def burp_selection_poll(
     path: str | None = None,
     method: str | None = None,
     has_response: bool | None = None,
+    created_from: Any | None = None,
+    created_to: Any | None = None,
+    sort: str | None = None,
     include_bodies: bool = False,
     compact: bool = True,
     consume: bool = False,
@@ -568,6 +603,9 @@ def burp_selection_poll(
             "path": path,
             "method": method,
             "hasResponse": has_response,
+            "createdFrom": created_from,
+            "createdTo": created_to,
+            "sort": sort,
             "includeBodies": include_bodies,
         },
     )
@@ -610,6 +648,9 @@ def burp_history_search(
     has_annotations: bool | None = None,
     has_notes: bool | None = None,
     highlight_color: str | None = None,
+    time_from: Any | None = None,
+    time_to: Any | None = None,
+    sort: str = "newest",
     compact: bool = True,
 ) -> dict[str, Any]:
     """搜索 Burp 全量 Proxy 历史。适合查旧流量、按关键字回溯登录/API/upload 等关键链路。"""
@@ -633,6 +674,9 @@ def burp_history_search(
             "hasAnnotations": has_annotations,
             "hasNotes": has_notes,
             "highlightColor": highlight_color,
+            "timeFrom": time_from,
+            "timeTo": time_to,
+            "sort": sort,
         },
     )
     return _compact_items_response(data, compact=compact and not include_bodies)
@@ -681,9 +725,9 @@ def burp_export_flow_bundle(flow_id: int, source: str = "history") -> dict[str, 
 
 
 @mcp.tool()
-def burp_live_overview(after_seq: int = 0, limit: int = 80) -> dict[str, Any]:
+def burp_live_overview(after_seq: int = 0, limit: int = 80, created_from: Any | None = None, created_to: Any | None = None, sort: str | None = None) -> dict[str, Any]:
     """快速汇总最近实时流量，按主机、状态码、标签统计，便于 AI 先做渗透流量定向。"""
-    data = burp_live_poll(after_seq=after_seq, limit=limit, include_bodies=False)
+    data = burp_live_poll(after_seq=after_seq, limit=limit, created_from=created_from, created_to=created_to, sort=sort, include_bodies=False)
     items = data.get("items", [])
     host_counter: Counter[str] = Counter()
     status_counter: Counter[str] = Counter()
@@ -724,9 +768,9 @@ def burp_live_overview(after_seq: int = 0, limit: int = 80) -> dict[str, Any]:
 
 
 @mcp.tool()
-def burp_logger_overview(after_seq: int = 0, limit: int = 80) -> dict[str, Any]:
+def burp_logger_overview(after_seq: int = 0, limit: int = 80, created_from: Any | None = None, created_to: Any | None = None, sort: str | None = None) -> dict[str, Any]:
     """快速汇总 Burp 内部工具流量，尤其适合看 fuzz 插件/Repeater/Intruder/Scanner 的请求响应。"""
-    data = burp_logger_poll(after_seq=after_seq, limit=limit, include_bodies=False)
+    data = burp_logger_poll(after_seq=after_seq, limit=limit, created_from=created_from, created_to=created_to, sort=sort, include_bodies=False)
     items = data.get("items", [])
     host_counter: Counter[str] = Counter()
     status_counter: Counter[str] = Counter()
@@ -769,6 +813,8 @@ def burp_target_overview(
     host: str | None = None,
     text: str | None = None,
     path: str | None = None,
+    time_from: Any | None = None,
+    time_to: Any | None = None,
     sources: str = "all",
     limit: int = 80,
     include_static: bool = False,
@@ -789,6 +835,8 @@ def burp_target_overview(
                 limit=per_source_limit,
                 host_contains=host,
                 path_contains=path,
+                time_from=time_from,
+                time_to=time_to,
                 include_bodies=False,
                 ignore_static=not include_static,
             )
@@ -803,6 +851,8 @@ def burp_target_overview(
                 text=text,
                 host=host,
                 path=path,
+                created_from=time_from,
+                created_to=time_to,
                 include_bodies=False,
             )
             items = data.get("items", [])
@@ -819,6 +869,8 @@ def burp_target_overview(
                 text=text,
                 host=host,
                 path=path,
+                created_from=time_from,
+                created_to=time_to,
                 include_bodies=False,
             )
             items = data.get("items", [])
@@ -837,6 +889,8 @@ def burp_target_overview(
                 text=text,
                 host=host,
                 path=path,
+                created_from=time_from,
+                created_to=time_to,
                 include_bodies=False,
             )
             items = data.get("items", [])
@@ -907,6 +961,8 @@ def burp_target_overview(
                 "host": host,
                 "text": text,
                 "path": path,
+                "timeFrom": time_from,
+                "timeTo": time_to,
                 "sources": selected_sources,
                 "perSourceLimit": per_source_limit,
                 "includeStatic": include_static,
@@ -932,6 +988,8 @@ def burp_marked_flows(
     host: str,
     sources: str = "logger,selection",
     text: str | None = None,
+    time_from: Any | None = None,
+    time_to: Any | None = None,
     limit: int = 120,
     include_static: bool = False,
 ) -> dict[str, Any]:
@@ -950,6 +1008,8 @@ def burp_marked_flows(
                 query=text,
                 limit=per_source_limit,
                 host_contains=host,
+                time_from=time_from,
+                time_to=time_to,
                 include_bodies=False,
                 ignore_static=not include_static,
                 has_annotations=True,
@@ -960,7 +1020,7 @@ def burp_marked_flows(
 
     if "live" in selected_sources:
         try:
-            data = burp_live_poll(limit=per_source_limit, text=text, host=host, include_bodies=False)
+            data = burp_live_poll(limit=per_source_limit, text=text, host=host, created_from=time_from, created_to=time_to, include_bodies=False)
             items = data.get("items", [])
             if not include_static:
                 items = [item for item in items if not _is_static_path(item.get("path"))]
@@ -970,7 +1030,7 @@ def burp_marked_flows(
 
     if "logger" in selected_sources:
         try:
-            data = burp_logger_poll(limit=per_source_limit, text=text, host=host, include_bodies=False)
+            data = burp_logger_poll(limit=per_source_limit, text=text, host=host, created_from=time_from, created_to=time_to, include_bodies=False)
             items = data.get("items", [])
             if not include_static:
                 items = [item for item in items if not _is_static_path(item.get("path"))]
@@ -980,7 +1040,7 @@ def burp_marked_flows(
 
     if "selection" in selected_sources:
         try:
-            data = burp_selection_poll(limit=per_source_limit, text=text, host=host, include_bodies=False)
+            data = burp_selection_poll(limit=per_source_limit, text=text, host=host, created_from=time_from, created_to=time_to, include_bodies=False)
             items = data.get("items", [])
             if not include_static:
                 items = [item for item in items if not _is_static_path(item.get("path"))]
@@ -1015,6 +1075,8 @@ def burp_marked_flows(
                 "host": host,
                 "sources": selected_sources,
                 "text": text,
+                "timeFrom": time_from,
+                "timeTo": time_to,
                 "perSourceLimit": per_source_limit,
                 "includeStatic": include_static,
             },
@@ -1037,6 +1099,8 @@ def burp_extension_activity_overview(
     host: str | None = None,
     path: str | None = None,
     text: str | None = None,
+    time_from: Any | None = None,
+    time_to: Any | None = None,
     include_sample_details: bool = False,
     sample_limit: int = 5,
 ) -> dict[str, Any]:
@@ -1048,6 +1112,8 @@ def burp_extension_activity_overview(
         host=host,
         path=path,
         tool_type="Extensions",
+        created_from=time_from,
+        created_to=time_to,
         include_bodies=False,
     )
     items = data.get("items", [])
@@ -1152,7 +1218,7 @@ def burp_replay_flow(
     headers: dict[str, str] | None = None,
     add_headers: dict[str, str] | None = None,
     remove_headers: list[str] | None = None,
-    body: str | None = None,
+    body: Any | None = None,
     path_replace_from: str | None = None,
     path_replace_to: str | None = None,
     body_replace_from: str | None = None,
@@ -1249,13 +1315,16 @@ def burp_rule_upsert(
     headers: dict[str, str] | None = None,
     add_headers: dict[str, str] | None = None,
     remove_headers: list[str] | None = None,
-    body: str | None = None,
+    body: Any | None = None,
     path_replace_from: str | None = None,
     path_replace_to: str | None = None,
     body_replace_from: str | None = None,
     body_replace_to: str | None = None,
     status_code: int | None = None,
     reason_phrase: str | None = None,
+    ttl_seconds: int | None = None,
+    max_matches: int | None = None,
+    auto_disable: bool | None = None,
 ) -> dict[str, Any]:
     """新增或更新自动规则。支持 ttl_seconds/max_matches/auto_disable 防遗留；action=modify/drop/spoof；apply_to=proxy/tool/all。"""
     if direction not in {"request", "response"}:
@@ -1391,37 +1460,37 @@ def _mcp_help_catalog() -> dict[str, Any]:
                 "target": {
                     "summary": "Target-centric map across history/live/logger/selection, grouped by host/status/method/tool/endpoint with high-value candidates.",
                     "tools": ["burp_target_overview", "burp_marked_flows", "burp_flow_get", "burp_logger_flow_get", "burp_selection_get"],
-                    "params": {"host": "recommended target host filter", "sources": "all or comma-separated history,live,logger,selection", "include_extensions": "keep plugin-generated target traffic in the same target view"},
-                    "example": "burp_target_overview(host='example.com', sources='all', limit=80) -> inspect one highValueCandidate",
+                    "params": {"host": "recommended target host filter", "time_from/time_to": "epoch seconds/ms or ISO-8601; applies to history time and live/logger/selection createdAt", "sources": "all or comma-separated history,live,logger,selection", "include_extensions": "keep plugin-generated target traffic in the same target view"},
+                    "example": "burp_target_overview(host='example.com', time_from='2026-06-06T10:00:00Z', sources='all', limit=80) -> inspect one highValueCandidate",
                 },
                 "marked_flows": {
                     "summary": "Host-scoped index of Burp comments/notes and highlight colors. Use it to lock onto manually or plugin-marked high-value flows before pulling full bodies.",
                     "tools": ["burp_marked_flows", "burp_flow_get", "burp_logger_flow_get", "burp_selection_get"],
-                    "params": {"host": "required target host", "sources": "default logger,selection; pass history if needed", "text": "match annotation/comment keywords"},
-                    "example": "burp_marked_flows(host='222.17.192.111', sources='logger,selection,history') -> inspect source+flowId",
+                    "params": {"host": "required target host", "sources": "default logger,selection; pass history if needed", "text": "match annotation/comment keywords", "time_from/time_to": "limit to a recent test window"},
+                    "example": "burp_marked_flows(host='222.17.192.111', sources='logger,selection,history', time_from='2026-06-06') -> inspect source+flowId",
                 },
                 "live": {
                     "summary": "Incremental Proxy buffer triage.",
                     "tools": ["burp_live_overview", "burp_live_poll", "burp_flow_get"],
-                    "params": {"after_seq": "cursor from latestCursor", "compact": "default true for list indexes", "include_bodies": "default false for triage"},
-                    "example": "burp_live_overview(after_seq=0, limit=80) -> burp_flow_get(flow_id, source='live')",
+                    "params": {"after_seq": "cursor from latestCursor", "created_from/created_to": "epoch seconds/ms or ISO-8601 filter on createdAt", "sort": "updated_asc default; updated_desc/newest/oldest available", "compact": "default true for list indexes", "include_bodies": "default false for triage"},
+                    "example": "burp_live_poll(created_from='2026-06-06T10:00:00Z', sort='newest', limit=20) -> burp_flow_get(flow_id, source='live')",
                 },
                 "history": {
                     "summary": "Search persisted Proxy history without replaying traffic. List results are compact by default; use burp_flow_get for full request/response.",
                     "tools": ["burp_history_search", "burp_flow_get"],
-                    "params": {"query": "plain text or regex", "host_contains/path_contains/status_min/status_max": "narrow filters", "compact": "default true"},
-                    "example": "burp_history_search(host_contains='example.com', path_contains='/api', limit=20)",
+                    "params": {"query": "plain text or regex", "host_contains/path_contains/status_min/status_max": "narrow filters", "time_from/time_to": "filter Burp history item time; epoch seconds/ms or ISO-8601", "sort": "newest default or oldest", "compact": "default true"},
+                    "example": "burp_history_search(host_contains='example.com', path_contains='/api', time_from='2026-06-06T10:00:00Z', sort='newest', limit=20)",
                 },
                 "logger": {
                     "summary": "Read Burp internal HTTP tool traffic captured after extension load; summaries include comments/highlight snapshots when available.",
                     "tools": ["burp_logger_overview", "burp_logger_poll", "burp_logger_flow_get", "burp_marked_flows"],
-                    "params": {"tool_type": "Repeater/Intruder/Scanner/Extensions etc.", "host": "Filter by target host.", "compact": "default true"},
-                    "example": "burp_logger_poll(tool_type='Repeater', limit=20)",
+                    "params": {"tool_type": "Repeater/Intruder/Scanner/Extensions etc.", "host": "Filter by target host.", "created_from/created_to": "filter createdAt for this buffer", "sort": "updated_asc default; updated_desc/newest/oldest available", "compact": "default true"},
+                    "example": "burp_logger_poll(tool_type='Repeater', created_from='2026-06-06T10:00:00Z', sort='newest', limit=20)",
                 },
                 "selection": {
                     "summary": "Read items captured from Burp UI selection via command palette/hotkey/context menu.",
                     "tools": ["burp_selection_poll", "burp_selection_get", "burp_flow_get"],
-                    "params": {"source": "Use source='selection' with flow_get/replay/export/send_to_repeater.", "consume": "selection_get defaults true to delete one-shot captured flows after reading"},
+                    "params": {"source": "Use source='selection' with flow_get/replay/export/send_to_repeater.", "created_from/created_to": "filter captured-at time", "sort": "updated_asc default; updated_desc/newest/oldest available", "consume": "selection_get defaults true to delete one-shot captured flows after reading"},
                     "example": "Right-click a marked Logger/message entry -> 'Burp MCP Bridge: Capture selection for AI', then burp_selection_poll(limit=20)",
                 },
             },

@@ -1,7 +1,7 @@
 {
   "name": "burpsuite-mcp-bridge",
-  "version": "2.0.0",
-  "description": "Burp Suite MCP bridge for target-centric traffic triage, marked-flow discovery, replay, rewrite automation, selection handoff, BCheck/Bambda import, and evidence export.",
+  "version": "2.0.1",
+  "description": "Burp Suite MCP bridge for target-centric traffic triage, marked-flow discovery, time-window search, replay, rewrite automation, selection handoff, and evidence export.",
   "author": {
     "name": "BurpSuite MCP Bridge",
     "email": "6jeffr3y@users.noreply.github.com",
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "BurpSuite MCP Bridge",
     "shortDescription": "把 Burp Suite 流量、重放、改写规则、Selection 与证据导出接入 MCP 客户端",
-    "longDescription": "面向 Codex / Agent AI 的 Burp Suite 本地桥接插件。支持目标视角流量画像、注释/高亮关键包检索、live/history/logger/selection 低噪声读取、按 flow id 拉完整包、改包重放、Repeater 联动、Rewrite Rule modify/drop/spoof、BCheck/Bambda 导入和原始证据导出。",
+    "longDescription": "面向 Codex / Agent AI 的 Burp Suite 本地桥接插件。支持目标视角流量画像、时间窗口搜索、注释/高亮关键包检索、live/history/logger/selection 低噪声读取、按 flow id 拉完整包、改包重放、Repeater 联动、Rewrite Rule modify/drop/spoof、BCheck/Bambda 导入和原始证据导出。",
     "developerName": "BurpSuite MCP Bridge",
     "category": "Coding",
     "capabilities": [
