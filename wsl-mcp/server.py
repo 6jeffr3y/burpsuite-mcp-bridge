@@ -92,10 +92,22 @@ def _timestamp() -> str:
     return time.strftime("%Y%m%d-%H%M%S")
 
 
-_STATIC_PATH_RE = re.compile(r"(?i)\.(?:css|js|mjs|map|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|mp4|webm|mp3|wav|pdf|zip|gz|br|wasm)(?:$|[?#])")
+_STATIC_PATH_RE = re.compile(r"(?i)\.(?:css|png|jpe?g|gif|svg|webp|avif|bmp|tiff?|ico|woff2?|ttf|otf|eot|mp4|webm|mpe?g|mov|avi|mkv|mp3|wav|ogg|flac|aac|pdf|zip|rar|7z|tar|gz|br)(?:$|[?#])")
 _UUID_RE = re.compile(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _HEX_ID_RE = re.compile(r"(?i)^[0-9a-f]{16,}$")
 _LONG_TOKEN_RE = re.compile(r"(?i)^[a-z0-9_-]{24,}$")
+_ANNOTATION_COUNT_RE = re.compile(r"(?i)([A-Za-z][A-Za-z0-9 _/-]{1,40})\s*\((\d+)\)")
+_HIGHLIGHT_WEIGHTS = {
+    "RED": 20,
+    "ORANGE": 16,
+    "YELLOW": 12,
+    "MAGENTA": 11,
+    "PINK": 9,
+    "CYAN": 7,
+    "BLUE": 7,
+    "GREEN": 6,
+    "GRAY": 3,
+}
 _TARGET_SOURCE_ORDER = ("history", "live", "logger", "selection")
 
 
@@ -170,12 +182,158 @@ def _flow_card(item: dict[str, Any], source: str | None = None, reasons: list[st
         "mimeType": item.get("mimeType"),
         "toolType": item.get("toolType"),
         "tags": item.get("tags") or [],
+        "comment": item.get("comment"),
+        "highlightColor": item.get("highlightColor"),
+        "hasComment": item.get("hasComment"),
+        "hasHighlight": item.get("hasHighlight"),
     }
     if score is not None:
         card["score"] = score
     if reasons is not None:
         card["reasons"] = reasons
     return card
+
+
+def _compact_flow_item(item: dict[str, Any]) -> dict[str, Any]:
+    request = item.get("request") if isinstance(item.get("request"), dict) else {}
+    response = item.get("response") if isinstance(item.get("response"), dict) else {}
+    compact: dict[str, Any] = {
+        "source": item.get("source"),
+        "flowId": item.get("flowId") if item.get("flowId") is not None else item.get("historyId"),
+        "historyId": item.get("historyId"),
+        "messageId": item.get("messageId"),
+        "updatedSeq": item.get("updatedSeq"),
+        "createdAt": item.get("createdAt") or item.get("time"),
+        "time": item.get("time"),
+        "batchId": item.get("batchId"),
+        "batchIndex": item.get("batchIndex"),
+        "selectionSource": item.get("selectionSource"),
+        "context": item.get("context"),
+        "method": item.get("method"),
+        "url": item.get("url"),
+        "host": item.get("host"),
+        "port": item.get("port"),
+        "secure": item.get("secure"),
+        "path": item.get("path"),
+        "inScope": item.get("inScope"),
+        "listenerPort": item.get("listenerPort"),
+        "listenerInterface": item.get("listenerInterface"),
+        "edited": item.get("edited"),
+        "toolType": item.get("toolType"),
+        "toolName": item.get("toolName"),
+        "hasResponse": item.get("hasResponse"),
+        "statusCode": item.get("statusCode"),
+        "mimeType": item.get("mimeType"),
+        "requestHeaderCount": request.get("headerCount"),
+        "requestBodyBytes": request.get("bodyBytes"),
+        "requestContentType": request.get("contentType"),
+        "responseHeaderCount": response.get("headerCount"),
+        "responseBodyBytes": response.get("bodyBytes"),
+        "responseContentType": response.get("contentType"),
+        "responseBodyKind": response.get("bodyKind"),
+        "tags": item.get("tags") or [],
+        "comment": item.get("comment"),
+        "hasComment": item.get("hasComment"),
+        "highlightColor": item.get("highlightColor"),
+        "hasHighlight": item.get("hasHighlight"),
+        "requestRuleHits": item.get("requestRuleHits"),
+        "responseRuleHits": item.get("responseRuleHits"),
+        "requestRuleAction": item.get("requestRuleAction"),
+        "responseRuleAction": item.get("responseRuleAction"),
+    }
+    return {key: value for key, value in compact.items() if value is not None}
+
+
+def _compact_items_response(data: dict[str, Any], compact: bool = True) -> dict[str, Any]:
+    if not compact:
+        return data
+    items = data.get("items")
+    if not isinstance(items, list):
+        return data
+    cloned = dict(data)
+    cloned["items"] = [_compact_flow_item(item) if isinstance(item, dict) else item for item in items]
+    cloned["compact"] = True
+    return cloned
+
+
+def _annotation_text(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    comment = item.get("comment")
+    if comment:
+        parts.append(str(comment))
+    annotations = item.get("annotations")
+    if isinstance(annotations, dict):
+        notes = annotations.get("notes")
+        if notes:
+            parts.append(str(notes))
+    return "\n".join(dict.fromkeys(parts))
+
+
+def _add_annotation_score(item: dict[str, Any], add) -> None:
+    text = _annotation_text(item)
+    lower = text.lower()
+
+    color = str(item.get("highlightColor") or "").upper()
+    color_weight = _HIGHLIGHT_WEIGHTS.get(color, 0)
+    if color_weight:
+        add(color_weight, f"Burp highlight color:{color}")
+    elif item.get("hasHighlight"):
+        add(5, "Burp highlight")
+
+    if item.get("hasComment"):
+        add(8, "Burp comment/notes")
+
+    if not text:
+        return
+
+    counted: dict[str, int] = {}
+    for label, raw_count in _ANNOTATION_COUNT_RE.findall(text):
+        label_key = " ".join(label.lower().split())
+        try:
+            counted[label_key] = max(counted.get(label_key, 0), int(raw_count))
+        except Exception:
+            continue
+
+    def count_for(*names: str) -> int:
+        for name in names:
+            key = name.lower()
+            for label, count in counted.items():
+                if key in label:
+                    return count
+        return 0
+
+    sensitive_count = count_for("sensitive field", "secret", "password field", "token")
+    if sensitive_count:
+        add(20 + min(30, sensitive_count * 2), f"annotation:sensitive-field({sensitive_count})")
+    elif any(key in lower for key in ("sensitive", "secret", "password", "token")):
+        add(18, "annotation:sensitive/secret")
+
+    username_count = count_for("username field", "user field", "account field")
+    if username_count:
+        add(12 + min(12, username_count * 2), f"annotation:username-field({username_count})")
+
+    linkfinder_count = count_for("linkfinder")
+    if linkfinder_count:
+        add(10 + min(35, max(1, linkfinder_count // 4)), f"annotation:linkfinder({linkfinder_count})")
+
+    source_map_count = count_for("source map", "sourcemap")
+    if source_map_count or "source map" in lower or "sourcemap" in lower:
+        add(16 + min(8, source_map_count), f"annotation:source-map({source_map_count or 1})")
+
+    email_count = count_for("email")
+    if email_count:
+        add(8 + min(10, email_count * 2), f"annotation:email({email_count})")
+
+    all_url_count = count_for("all url", "url")
+    if all_url_count:
+        add(4 + min(12, all_url_count), f"annotation:url({all_url_count})")
+
+    if "url as a value" in lower:
+        add(6, "annotation:url-as-value")
+    if "router push" in lower:
+        add(8, "annotation:router-push")
+    if "api" in lower:
+        add(6, "annotation:api")
 
 
 def _score_target_flow(item: dict[str, Any]) -> tuple[int, list[str]]:
@@ -203,8 +361,12 @@ def _score_target_flow(item: dict[str, Any]) -> tuple[int, list[str]]:
         for tag in sorted(tags):
             if tag in {"auth", "upload", "api"}:
                 add(8, f"tag:{tag}")
+            elif tag in {"commented", "highlighted"}:
+                add(4, f"burp {tag}")
             elif tag not in {"static"}:
                 add(3, f"tag:{tag}")
+
+    _add_annotation_score(item, add)
 
     if any(k in haystack for k in ("login", "auth", "oauth", "sso", "cas", "saml", "token", "session", "signin", "logout")):
         add(12, "auth/session endpoint")
@@ -236,6 +398,15 @@ def _score_target_flow(item: dict[str, Any]) -> tuple[int, list[str]]:
     return score, reasons
 
 
+def _flow_has_mark(item: dict[str, Any]) -> bool:
+    if item.get("hasComment") or item.get("hasHighlight"):
+        return True
+    annotations = item.get("annotations")
+    if isinstance(annotations, dict):
+        return bool(annotations.get("hasNotes") or annotations.get("hasHighlightColor"))
+    return False
+
+
 def _edits_payload(
     method: str | None = None,
     path: str | None = None,
@@ -252,6 +423,9 @@ def _edits_payload(
     body_replace_to: str | None = None,
     status_code: int | None = None,
     reason_phrase: str | None = None,
+    ttl_seconds: int | None = None,
+    max_matches: int | None = None,
+    auto_disable: bool | None = None,
 ) -> dict[str, Any]:
     return {
         "method": method,
@@ -295,9 +469,10 @@ def burp_live_poll(
     has_response: bool | None = None,
     in_scope: bool | None = None,
     include_bodies: bool = False,
+    compact: bool = True,
 ) -> dict[str, Any]:
     """从实时 ring buffer 增量读取 Burp Proxy 流量。优先用这个做低噪声轮询，再按 flowId 拉详情。"""
-    return _request_json(
+    data = _request_json(
         "/api/flows",
         query={
             "afterSeq": after_seq,
@@ -311,6 +486,7 @@ def burp_live_poll(
             "includeBodies": include_bodies,
         },
     )
+    return _compact_items_response(data, compact=compact and not include_bodies)
 
 
 @mcp.tool()
@@ -341,9 +517,10 @@ def burp_logger_poll(
     has_response: bool | None = None,
     in_scope: bool | None = None,
     include_bodies: bool = False,
+    compact: bool = True,
 ) -> dict[str, Any]:
     """读取 Burp 内部 HTTP 工具流量（logger-like）。适合看 Repeater/Intruder/Scanner/插件 fuzz 等非 Proxy 面板流量。"""
-    return _request_json(
+    data = _request_json(
         "/api/logger/flows",
         query={
             "afterSeq": after_seq,
@@ -358,6 +535,7 @@ def burp_logger_poll(
             "includeBodies": include_bodies,
         },
     )
+    return _compact_items_response(data, compact=compact and not include_bodies)
 
 
 @mcp.tool()
@@ -376,9 +554,11 @@ def burp_selection_poll(
     method: str | None = None,
     has_response: bool | None = None,
     include_bodies: bool = False,
+    compact: bool = True,
+    consume: bool = False,
 ) -> dict[str, Any]:
     """读取 Burp HotKey/command-palette 捕获的选中流量。人在 Burp 中选中后触发 Capture selection for AI，再由 AI 拉取。"""
-    return _request_json(
+    data = _request_json(
         "/api/selection/flows",
         query={
             "afterSeq": after_seq,
@@ -391,12 +571,25 @@ def burp_selection_poll(
             "includeBodies": include_bodies,
         },
     )
+    result = _compact_items_response(data, compact=compact and not include_bodies)
+    if consume:
+        clear_result = burp_clear_selection_buffer()
+        if isinstance(result, dict):
+            result["consumed"] = True
+            result["clearResult"] = clear_result
+    return result
 
 
 @mcp.tool()
-def burp_selection_get(flow_id: int, include_bodies: bool = True) -> dict[str, Any]:
-    """读取一条由 Burp HotKey/command-palette 捕获的 selection flow 详情。"""
-    return burp_flow_get(flow_id=flow_id, source="selection", include_bodies=include_bodies)
+def burp_selection_get(flow_id: int, include_bodies: bool = True, consume: bool = True) -> dict[str, Any]:
+    """读取一条由 Burp HotKey/command-palette/右键菜单捕获的 selection flow 详情；默认读取后消费删除，避免一次性发送包长期残留。"""
+    detail = burp_flow_get(flow_id=flow_id, source="selection", include_bodies=include_bodies)
+    if consume:
+        consume_result = _request_json(f"/api/selection/flows/{flow_id}", method="DELETE")
+        if isinstance(detail, dict):
+            detail["consumed"] = True
+            detail["consumeResult"] = consume_result
+    return detail
 
 
 @mcp.tool()
@@ -414,9 +607,13 @@ def burp_history_search(
     status_max: int | None = None,
     include_bodies: bool = False,
     ignore_static: bool | None = True,
+    has_annotations: bool | None = None,
+    has_notes: bool | None = None,
+    highlight_color: str | None = None,
+    compact: bool = True,
 ) -> dict[str, Any]:
     """搜索 Burp 全量 Proxy 历史。适合查旧流量、按关键字回溯登录/API/upload 等关键链路。"""
-    return _request_json(
+    data = _request_json(
         "/api/history/search",
         method="POST",
         payload={
@@ -433,8 +630,12 @@ def burp_history_search(
             "statusMax": status_max,
             "includeBodies": include_bodies,
             "ignoreStatic": ignore_static,
+            "hasAnnotations": has_annotations,
+            "hasNotes": has_notes,
+            "highlightColor": highlight_color,
         },
     )
+    return _compact_items_response(data, compact=compact and not include_bodies)
 
 
 @mcp.tool()
@@ -727,6 +928,109 @@ def burp_target_overview(
 
 
 @mcp.tool()
+def burp_marked_flows(
+    host: str,
+    sources: str = "logger,selection",
+    text: str | None = None,
+    limit: int = 120,
+    include_static: bool = False,
+) -> dict[str, Any]:
+    """按指定 host 列出 Burp 中带注释/高亮颜色的流量索引；用于快速锁定人工标记的关键包，再按 source+flowId 拉详情。"""
+    if not host or not host.strip():
+        raise ValueError("host 必填，例如 host='example.com'；该工具用于按被测单位收敛人工标注流量")
+
+    selected_sources = _parse_source_csv(sources)
+    per_source_limit = max(1, min(limit, 200))
+    collected: list[dict[str, Any]] = []
+    source_errors: dict[str, str] = {}
+
+    if "history" in selected_sources:
+        try:
+            data = burp_history_search(
+                query=text,
+                limit=per_source_limit,
+                host_contains=host,
+                include_bodies=False,
+                ignore_static=not include_static,
+                has_annotations=True,
+            )
+            collected.extend(data.get("items", []))
+        except Exception as exc:
+            source_errors["history"] = str(exc)
+
+    if "live" in selected_sources:
+        try:
+            data = burp_live_poll(limit=per_source_limit, text=text, host=host, include_bodies=False)
+            items = data.get("items", [])
+            if not include_static:
+                items = [item for item in items if not _is_static_path(item.get("path"))]
+            collected.extend(items)
+        except Exception as exc:
+            source_errors["live"] = str(exc)
+
+    if "logger" in selected_sources:
+        try:
+            data = burp_logger_poll(limit=per_source_limit, text=text, host=host, include_bodies=False)
+            items = data.get("items", [])
+            if not include_static:
+                items = [item for item in items if not _is_static_path(item.get("path"))]
+            collected.extend(items)
+        except Exception as exc:
+            source_errors["logger"] = str(exc)
+
+    if "selection" in selected_sources:
+        try:
+            data = burp_selection_poll(limit=per_source_limit, text=text, host=host, include_bodies=False)
+            items = data.get("items", [])
+            if not include_static:
+                items = [item for item in items if not _is_static_path(item.get("path"))]
+            collected.extend(items)
+        except Exception as exc:
+            source_errors["selection"] = str(exc)
+
+    marked: list[dict[str, Any]] = []
+    by_color: Counter[str] = Counter()
+    for item in collected:
+        if not _flow_has_mark(item):
+            continue
+        score, reasons = _score_target_flow(item)
+        card = _flow_card(item, reasons=reasons, score=score)
+        marked.append(card)
+        color = str(card.get("highlightColor") or "NONE")
+        by_color[color] += 1
+
+    marked.sort(
+        key=lambda card: (
+            -int(card.get("score") or 0),
+            str(card.get("source") or ""),
+            int(card.get("flowId") or 0),
+        )
+    )
+
+    return {
+        "ok": True,
+        "item": {
+            "purpose": "Host-scoped Burp comments/highlights index. Use source+flowId from markedFlows to fetch exact request/response.",
+            "filters": {
+                "host": host,
+                "sources": selected_sources,
+                "text": text,
+                "perSourceLimit": per_source_limit,
+                "includeStatic": include_static,
+            },
+            "count": len(marked),
+            "sourceErrors": source_errors,
+            "byHighlightColor": by_color.most_common(),
+            "markedFlows": marked[:per_source_limit],
+            "nextSteps": [
+                "Inspect the best marked flow with burp_flow_get(flow_id=..., source='history/live/selection') or burp_logger_flow_get(flow_id=...).",
+                "If comments are used as triage labels, pass text='keyword' to narrow the annotation/comment column without pulling bodies.",
+            ],
+        },
+    }
+
+
+@mcp.tool()
 def burp_extension_activity_overview(
     after_seq: int = 0,
     limit: int = 80,
@@ -826,7 +1130,7 @@ def burp_export_flow(flow_id: int, source: str = "live", include_bodies: bool = 
     if source == "logger":
         detail = burp_logger_flow_get(flow_id=flow_id, include_bodies=include_bodies)
     elif source == "selection":
-        detail = burp_selection_get(flow_id=flow_id, include_bodies=include_bodies)
+        detail = burp_selection_get(flow_id=flow_id, include_bodies=include_bodies, consume=False)
     else:
         detail = burp_flow_get(flow_id=flow_id, source=source, include_bodies=include_bodies)
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -953,7 +1257,7 @@ def burp_rule_upsert(
     status_code: int | None = None,
     reason_phrase: str | None = None,
 ) -> dict[str, Any]:
-    """新增或更新自动规则。action=modify 改写并放行；action=drop 丢弃匹配消息；action=spoof 用规则字段构造替代响应；apply_to=proxy/tool/all 控制作用面。"""
+    """新增或更新自动规则。支持 ttl_seconds/max_matches/auto_disable 防遗留；action=modify/drop/spoof；apply_to=proxy/tool/all。"""
     if direction not in {"request", "response"}:
         raise ValueError("direction 必须是 request 或 response")
     if action not in {"modify", "drop", "spoof"}:
@@ -973,6 +1277,9 @@ def burp_rule_upsert(
         "matchBodyContains": match_body_contains,
         "matchStatusMin": match_status_min,
         "matchStatusMax": match_status_max,
+        "ttlSeconds": ttl_seconds,
+        "maxMatches": max_matches,
+        "autoDisable": auto_disable,
     }
     payload.update(
         _edits_payload(
@@ -1083,33 +1390,39 @@ def _mcp_help_catalog() -> dict[str, Any]:
             "topics": {
                 "target": {
                     "summary": "Target-centric map across history/live/logger/selection, grouped by host/status/method/tool/endpoint with high-value candidates.",
-                    "tools": ["burp_target_overview", "burp_flow_get", "burp_logger_flow_get", "burp_selection_get"],
+                    "tools": ["burp_target_overview", "burp_marked_flows", "burp_flow_get", "burp_logger_flow_get", "burp_selection_get"],
                     "params": {"host": "recommended target host filter", "sources": "all or comma-separated history,live,logger,selection", "include_extensions": "keep plugin-generated target traffic in the same target view"},
                     "example": "burp_target_overview(host='example.com', sources='all', limit=80) -> inspect one highValueCandidate",
+                },
+                "marked_flows": {
+                    "summary": "Host-scoped index of Burp comments/notes and highlight colors. Use it to lock onto manually or plugin-marked high-value flows before pulling full bodies.",
+                    "tools": ["burp_marked_flows", "burp_flow_get", "burp_logger_flow_get", "burp_selection_get"],
+                    "params": {"host": "required target host", "sources": "default logger,selection; pass history if needed", "text": "match annotation/comment keywords"},
+                    "example": "burp_marked_flows(host='222.17.192.111', sources='logger,selection,history') -> inspect source+flowId",
                 },
                 "live": {
                     "summary": "Incremental Proxy buffer triage.",
                     "tools": ["burp_live_overview", "burp_live_poll", "burp_flow_get"],
-                    "params": {"after_seq": "cursor from latestCursor", "include_bodies": "default false for triage"},
+                    "params": {"after_seq": "cursor from latestCursor", "compact": "default true for list indexes", "include_bodies": "default false for triage"},
                     "example": "burp_live_overview(after_seq=0, limit=80) -> burp_flow_get(flow_id, source='live')",
                 },
                 "history": {
-                    "summary": "Search persisted Proxy history without replaying traffic.",
+                    "summary": "Search persisted Proxy history without replaying traffic. List results are compact by default; use burp_flow_get for full request/response.",
                     "tools": ["burp_history_search", "burp_flow_get"],
-                    "params": {"query": "plain text or regex", "host_contains/path_contains/status_min/status_max": "narrow filters"},
+                    "params": {"query": "plain text or regex", "host_contains/path_contains/status_min/status_max": "narrow filters", "compact": "default true"},
                     "example": "burp_history_search(host_contains='example.com', path_contains='/api', limit=20)",
                 },
                 "logger": {
-                    "summary": "Read Burp internal HTTP tool traffic captured after extension load.",
-                    "tools": ["burp_logger_overview", "burp_logger_poll", "burp_logger_flow_get"],
-                    "params": {"tool_type": "Repeater/Intruder/Scanner/Extensions etc."},
+                    "summary": "Read Burp internal HTTP tool traffic captured after extension load; summaries include comments/highlight snapshots when available.",
+                    "tools": ["burp_logger_overview", "burp_logger_poll", "burp_logger_flow_get", "burp_marked_flows"],
+                    "params": {"tool_type": "Repeater/Intruder/Scanner/Extensions etc.", "host": "Filter by target host.", "compact": "default true"},
                     "example": "burp_logger_poll(tool_type='Repeater', limit=20)",
                 },
                 "selection": {
-                    "summary": "Read items captured from Burp UI selection via command palette/hotkey.",
+                    "summary": "Read items captured from Burp UI selection via command palette/hotkey/context menu.",
                     "tools": ["burp_selection_poll", "burp_selection_get", "burp_flow_get"],
-                    "params": {"source": "Use source='selection' with flow_get/replay/export/send_to_repeater."},
-                    "example": "Trigger 'Burp MCP Bridge: Capture selection for AI' in Burp, then burp_selection_poll(limit=20)",
+                    "params": {"source": "Use source='selection' with flow_get/replay/export/send_to_repeater.", "consume": "selection_get defaults true to delete one-shot captured flows after reading"},
+                    "example": "Right-click a marked Logger/message entry -> 'Burp MCP Bridge: Capture selection for AI', then burp_selection_poll(limit=20)",
                 },
             },
         },
@@ -1118,9 +1431,15 @@ def _mcp_help_catalog() -> dict[str, Any]:
             "topics": {
                 "flow": {
                     "summary": "Replay live/history request with method/path/header/body edits.",
-                    "tools": ["burp_replay_flow"],
+                    "tools": ["burp_replay_flow", "burp_send_to_repeater"],
                     "params": {"apply_rules": "run rewrite rules before/after replay", "send_to_repeater": "also open request in Repeater"},
                     "example": "burp_replay_flow(flow_id=123, source='history', path_replace_from='id=1', path_replace_to='id=2')",
+                },
+                "repeater": {
+                    "summary": "Open an existing captured flow directly in Burp Repeater without sending a network request first.",
+                    "tools": ["burp_send_to_repeater"],
+                    "params": {"source": "live|history|logger|selection", "tab_name": "Repeater tab name"},
+                    "example": "burp_send_to_repeater(flow_id=4, source='history', tab_name='AI review')",
                 },
                 "raw": {
                     "summary": "Send a fully assembled raw HTTP request through Burp HTTP stack.",
@@ -1136,8 +1455,18 @@ def _mcp_help_catalog() -> dict[str, Any]:
                 "actions": {
                     "summary": "modify/drop/spoof semantics.",
                     "tools": ["burp_rules_list", "burp_rule_upsert", "burp_rule_delete"],
-                    "params": {"action": "modify|drop|spoof", "direction": "request|response", "apply_to": "proxy|tool|all"},
-                    "example": "burp_rule_upsert(direction='request', action='spoof', apply_to='proxy', match_host_contains='example.com', body='mock')",
+                    "params": {"action": "modify|drop|spoof", "direction": "request|response", "apply_to": "proxy|tool|all", "ttl_seconds/max_matches": "recommended for temporary validation rules"},
+                    "example": "burp_rule_upsert(direction='request', action='spoof', apply_to='proxy', match_host_contains='example.com', body='mock', max_matches=1, ttl_seconds=300)",
+                },
+                "safety": {
+                    "summary": "Prevent temporary rewrite/drop/spoof rules from affecting later testing.",
+                    "tools": ["burp_rules_list", "burp_rule_upsert", "burp_rule_delete"],
+                    "params": {"ttl_seconds": "auto-expire after seconds, max 86400", "max_matches": "auto-disable after N matches", "auto_disable": "default true when ttl/max is set"},
+                    "details": [
+                        "burp_rules_list returns active/expired/maxMatchesReached/matchCount/lastMatchAt for cleanup and reporting.",
+                        "Use max_matches=1 for one-shot spoof/drop validation.",
+                        "Use ttl_seconds for temporary header/body rewrites during a focused test phase."
+                    ],
                 },
                 "scope": {
                     "summary": "apply_to controls where rules run.",
@@ -1155,7 +1484,13 @@ def _mcp_help_catalog() -> dict[str, Any]:
                 "export": {
                     "summary": "Write JSON or raw request/response bundles to disk.",
                     "tools": ["burp_export_flow", "burp_export_flow_bundle"],
-                    "params": {"source": "live|history|logger", "include_bodies": "use false for huge flows unless needed"},
+                    "params": {"source": "live|history|logger|selection", "include_bodies": "use false for huge flows unless needed"},
+                },
+                "cleanup": {
+                    "summary": "Clear transient MCP-side buffers when starting a fresh validation phase or after one-shot selection packets are consumed.",
+                    "tools": ["burp_clear_live_buffer", "burp_clear_logger_buffer", "burp_clear_selection_buffer"],
+                    "params": {"selection": "one-shot UI captures; normally consumed by burp_selection_get", "live/logger": "clear only at phase boundaries to avoid losing useful context"},
+                    "example": "burp_clear_selection_buffer()",
                 },
             },
         },
@@ -1163,12 +1498,13 @@ def _mcp_help_catalog() -> dict[str, Any]:
             "summary": "Runtime-detected Montoya 2026.4.x integrations.",
             "topics": {
                 "selection": {
-                    "summary": "Command palette / HotKey bridge from Burp UI selection to MCP.",
+                    "summary": "Command palette / HotKey / context-menu bridge from Burp UI selection to MCP.",
                     "tools": ["burp_selection_poll", "burp_selection_get"],
                     "details": [
-                        "Registers 'Burp MCP Bridge: Capture selection for AI' where supported.",
+                        "Registers 'Burp MCP Bridge: Capture selection for AI' where supported, plus a right-click context menu action.",
                         "Captured items become source=selection so existing replay/export/repeater tools can operate on them.",
-                        "Default hotkey is Ctrl+Alt+M; command palette discovery is preferred if a shortcut conflicts."
+                        "burp_selection_get consumes the item by default after reading; pass consume=false if you need to inspect it repeatedly.",
+                        "Default hotkey is Ctrl+Alt+M; for Logger/message views, prefer right-click capture if hotkey context is unavailable."
                     ],
                 },
                 "compat": {
