@@ -105,6 +105,12 @@ See `config-examples/` for WSL mirrored, WSL NAT, Windows, and macOS variants.
 
 ---
 
+## Codex plugin marketplace readiness
+
+This repository ships a valid `.codex-plugin/plugin.json`, icon assets, release JARs, and direct MCP configuration examples. It is suitable for submission to community Codex plugin directories such as `awesome-codex-plugins` for discovery, while remaining installable directly from this repository.
+
+---
+
 ## Core MCP tools
 
 ### Status and help

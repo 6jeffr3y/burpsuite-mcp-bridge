@@ -105,6 +105,12 @@ BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
 
 ---
 
+## Codex 插件市场准备状态
+
+本仓库已经包含有效的 `.codex-plugin/plugin.json`、图标资源、发布版 JAR 和直接启动 MCP 的配置示例。它可以提交到 `awesome-codex-plugins` 这类社区 Codex 插件目录获取曝光，同时也可以直接从本仓库安装使用。
+
+---
+
 ## 主要 MCP 工具
 
 ### 状态与帮助
