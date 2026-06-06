@@ -1,6 +1,0 @@
-[mcp_servers.burpsuite-mcp-bridge]
-command = "bash"
-args = ["/path/to/burpsuite-mcp-bridge-release/scripts/run_wsl_mcp.sh"]
-
-[mcp_servers.burpsuite-mcp-bridge.env]
-BURP_MCP_BRIDGE_PORT = "9639"

@@ -1,23 +1,31 @@
 # Changelog
 
+## 1.1.0
+
+### Highlights
+- Added target-centric traffic overview via `burp_target_overview`.
+- Added staged MCP help via `burp_mcp_list`.
+- Implemented real rewrite-rule actions: `modify`, `drop`, and `spoof`.
+- Added rule scope control: `proxy`, `tool`, and `all`.
+- Added Burp 2026.4.x runtime-detected integrations:
+  - command palette / HotKey selection capture
+  - official internal-tool request drop/spoof when available
+  - BCheck import
+  - Bambda import
+- Added Burp UI diagnostics, command copy helpers, and improved rewrite-rule UX.
+- Simplified configuration: examples directly start `wsl-mcp/server.py` and set `BURP_MCP_BRIDGE_URL`; wrapper scripts were removed from the release package.
+
+### Stability / Compatibility
+- Compile baseline remains `montoya-api 2025.10`.
+- Optional 2026.4.x features are detected at runtime.
+- JSON detail responses keep preview-first body handling; full raw evidence is exported via bundle files.
+
+### Tested Baseline
+- Burp Suite Professional 2026.4.2
+
 ## 1.0.0
 
 ### Highlights
-- Simple configuration for **Windows Burp ↔ WSL Codex / Agent AI / MCP CLI / IDE** communication.
-- Reads both **Burp Proxy traffic** and **Burp internal HTTP tool / extension / fuzz traffic**.
-- Supports **request replay with mutation**, **request/response rewrite rules**, **Repeater handoff**, and **safe evidence export**.
-- Supports both **stdio MCP** and **Streamable HTTP MCP** transports.
-
-### Stability / Performance
-- loopback-only bridge by default
-- bounded worker pool and bounded queued clients
-- bounded live/logger ring buffers
-- preview-only body extraction for detail responses
-- temp-file backed copies for captured live/logger request/response objects
-- large-body-safe search path using Burp/Montoya `contains()`
-- request/response body mutation size guards
-- logger buffer clear support
-- raw request/response bundle export for oversized flows
-
-### Tested Baseline
-- Burp Suite Professional 2025.10.3
+- Initial release for Windows Burp ↔ WSL Codex / Agent AI / MCP CLI / IDE communication.
+- Reads Burp Proxy traffic and logger-like internal HTTP tool traffic.
+- Supports replay, rewrite rules, Repeater handoff, and raw bundle export.

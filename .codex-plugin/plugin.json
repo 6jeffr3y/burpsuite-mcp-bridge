@@ -1,7 +1,7 @@
 {
   "name": "burpsuite-mcp-bridge",
-  "version": "1.0.0",
-  "description": "Production-oriented Burp Suite MCP bridge for proxy traffic triage, replay, logger-like tool capture, and request/response automation across WSL and Windows clients.",
+  "version": "1.1.0",
+  "description": "Burp Suite MCP bridge for target-centric traffic triage, replay, rewrite automation, UI selection handoff, BCheck/Bambda import, and evidence export across WSL/Windows/macOS clients.",
   "author": {
     "name": "BurpSuite MCP Bridge",
     "email": "support@example.invalid",
@@ -24,7 +24,7 @@
   "interface": {
     "displayName": "BurpSuite MCP Bridge",
     "shortDescription": "Bridge Burp Suite traffic, replay, and rewrite workflows into MCP clients and IDEs",
-    "longDescription": "Expose Burp Suite proxy and internal HTTP tool traffic to MCP clients over standard transports. Supports low-noise polling, history search, replay with request mutation, request/response rewrite rules, Repeater handoff, logger-like capture, and exportable evidence across WSL and Windows setups.",
+    "longDescription": "Expose Burp Suite proxy, history, logger-like internal tool traffic, and UI-selected messages to MCP clients. Supports target-centric overview, low-noise polling, replay with mutation, request/response rewrite rules with modify/drop/spoof actions, Repeater handoff, BCheck/Bambda import, and exportable raw evidence.",
     "developerName": "BurpSuite MCP Bridge",
     "category": "Coding",
     "capabilities": [
@@ -37,9 +37,9 @@
     "composerIcon": "./assets/icon.svg",
     "logo": "./assets/logo.svg",
     "defaultPrompt": [
-      "Use BurpSuite MCP Bridge to summarize recent proxy traffic and identify the login chain.",
-      "Use BurpSuite MCP Bridge to inspect Burp history for upload endpoints and replay a candidate request with a harmless header mutation.",
-      "Use BurpSuite MCP Bridge to export the exact request/response pair that proves a finding, then create a temporary response rewrite rule for verification."
+      "Use BurpSuite MCP Bridge to build a target overview for the current host and pick high-value candidate flows.",
+      "Use BurpSuite MCP Bridge to inspect a selected Burp message, replay one controlled mutation, and export the raw evidence bundle.",
+      "Use BurpSuite MCP Bridge to create a temporary scoped rewrite rule, verify its effect, then delete or disable it."
     ]
   }
 }

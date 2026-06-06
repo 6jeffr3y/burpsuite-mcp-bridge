@@ -2,94 +2,50 @@
 
 English | [简体中文](./README_CN.md)
 
-**Simple MCP connectivity for Windows Burp Suite, WSL, Agent-AI, Codex, MCP CLI, and IDE workflows.**
+**MCP bridge for Burp Suite traffic, replay, rewrite automation, UI selection handoff, and evidence export.**
 
-BurpSuite MCP Bridge is built for the real-world case where Burp runs on Windows while AI agents, CLIs, and IDEs need fast, low-noise access to traffic, replay, and automation features — without fighting cross-environment setup.
-
----
-
-## Why this project stands out
-
-### Minimal setup, practical workflows
-- Load **one Burp JAR**
-- Start **one MCP runtime**
-- Connect from **WSL**, **Windows**, **Codex**, **Agent-AI**, **IDE**, or **MCP CLI**
-
-### Designed for mixed environments
-- **Windows Burp + WSL Codex**
-- **Windows Burp + Windows MCP clients**
-- **Proxy traffic + internal Burp HTTP tool traffic**
-
-### Built for agent-assisted testing
-- low-noise traffic polling
-- replay with safe mutations
-- temporary request / response rewrite rules
-- Repeater handoff
-- full raw bundle export when bodies are too large to inline
+This release is designed for real mixed-environment workflows: Burp can run on Windows while Codex/AI agents run in WSL, Windows, or macOS. The default setup uses stdio MCP and points the Python MCP server at the Burp extension bridge with one explicit URL.
 
 ---
 
-## Feature snapshot
+## What's new in v1.1.0
 
-| Area | Capability |
-|---|---|
-| Burp traffic | Live Proxy polling, selective history search, per-flow detail |
-| Internal Burp traffic | Logger-like capture for Repeater, Intruder, Scanner, and extension-issued HTTP traffic |
-| AI operations | Replay captured requests, mutate headers/path/body, create temporary rewrite rules |
-| Safety | Loopback-only bridge, bounded workers/queues, preview-first body handling, raw bundle export |
-| MCP transports | **stdio MCP** and **Streamable HTTP MCP** |
-| Target environments | WSL, Windows CLI, IDEs, Agent-AI clients |
+- Unified MCP response/error shape.
+- Rewrite rules now support real `modify`, `drop`, and `spoof` actions.
+- Rule scope supports `proxy`, `tool`, and `all`.
+- Burp 2026.4.x runtime-detected integrations:
+  - command palette / HotKey selection capture
+  - official internal-tool request drop/spoof when available
+  - BCheck import
+  - Bambda import
+- New target-centric workflow: `burp_target_overview(host=...)`.
+- New staged help: `burp_mcp_list(section=..., topic=...)`.
+- Better Burp UI diagnostics, quick MCP command copy panel, and rewrite-rule UX.
+- Simplified configuration: no wrapper scripts are required.
 
----
-
-## Architecture
-
-```mermaid
-flowchart LR
-    A[MCP Client / IDE / Agent] -->|stdio MCP or Streamable HTTP MCP| B[BurpSuite MCP Runtime]
-    B -->|localhost bridge| C[BurpSuite MCP Bridge Extension]
-    C --> D[Burp Proxy Handlers]
-    C --> E[Burp HttpHandler]
-    C --> F[History / Repeater / Internal Replay APIs]
-    D --> G[Proxy Traffic]
-    E --> H[Logger-like Tool Traffic]
-    F --> I[Replay / Rewrite / Export]
-```
-
-### What each layer does
-
-- **Burp extension**
-  - exposes a localhost bridge
-  - captures Proxy traffic
-  - captures Burp internal HTTP tool traffic
-  - applies temporary request/response rewrite rules
-  - performs internal replay and Repeater handoff
-- **MCP runtime**
-  - translates MCP tool calls into bridge operations
-  - supports stdio MCP and Streamable HTTP MCP
-- **Client side**
-  - Codex, Agent-AI, IDEs, MCP CLI, or any compatible client consume the same tools
+Tested with **Burp Suite Professional 2026.4.2**. Compile baseline remains `montoya-api 2025.10`; newer features are runtime-detected for compatibility.
 
 ---
 
-## Integration flow
+## Included files
 
-```mermaid
-flowchart TD
-    A[Load JAR in Burp] --> B[Enable Burp MCP Bridge]
-    B --> C[Check bridge health on 127.0.0.1:9639]
-    C --> D{Choose MCP transport}
-    D -->|stdio| E[Start MCP with run_wsl_mcp.sh or Windows launcher]
-    D -->|HTTP| F[Start MCP with run_wsl_mcp_http.sh or Windows HTTP launcher]
-    E --> G[Connect client using command + args]
-    F --> H[Connect client using http://127.0.0.1:9640/mcp]
-    G --> I[Use live poll / history / replay / rewrite / export]
-    H --> I
+```text
+burp-plugin/
+  burpsuite-mcp-bridge-1.1.0-all.jar
+  burpsuite-mcp-bridge-latest.jar
+wsl-mcp/
+  server.py
+config-examples/
+  codex-wsl-mirrored.toml
+  codex-wsl-nat.toml
+  codex-windows.toml
+  codex-macos.toml
+requirements-wsl.txt
 ```
 
 ---
 
-## 3-minute quick start
+## Quick start
 
 ### 1) Load the Burp extension
 
@@ -99,261 +55,130 @@ In Burp Suite, load:
 burp-plugin/burpsuite-mcp-bridge-latest.jar
 ```
 
-Recommended Burp Bridge settings:
-
-- Bind host: `127.0.0.1`
-- Port: `9639`
-- Max live/logger entries: `1500`
-- Max body preview bytes: `32768`
-- Scope only: `off`
-- Ignore static: `on`
-
-### 2) Verify the bridge
-
-```bash
-./scripts/check_bridge.sh
-```
-
-Expected bridge URL:
+Recommended bridge settings:
 
 ```text
-http://127.0.0.1:9639
+Bind host: 127.0.0.1
+Port: 9639
+Max live/logger entries: 1500
+Max body preview bytes: 32768
+Ignore static: on
 ```
 
-### 3) Choose one MCP transport
+For WSL NAT, bind Burp Bridge to the Windows LAN IP or `0.0.0.0`, then use that LAN IP in `BURP_MCP_BRIDGE_URL`.
 
-#### Option A — stdio MCP
-Best for local MCP clients using `command + args`.
+### 2) Install MCP runtime dependency
 
-- WSL / Linux
-  - `scripts/run_wsl_mcp.sh`
-- Windows
-  - `scripts/run_windows_mcp.cmd`
-  - `scripts/run_windows_mcp.ps1`
+```bash
+python3 -m pip install -r requirements-wsl.txt
+```
 
-#### Option B — Streamable HTTP MCP
-Best for URL-based MCP clients and IDE integrations.
+On Windows, use your normal Python installation and install the same requirement.
 
-- WSL / Linux
-  - `scripts/run_wsl_mcp_http.sh`
-- Windows
-  - `scripts/run_windows_mcp_http.cmd`
-  - `scripts/run_windows_mcp_http.ps1`
+### 3) Configure Codex / MCP
 
-Default MCP URL:
+Default stdio setup directly starts `wsl-mcp/server.py`; no wrapper script is required.
+
+WSL mirrored / local loopback:
+
+```toml
+[mcp_servers.burpsuite-mcp-bridge]
+command = "python3"
+args = ["/mnt/d/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+
+[mcp_servers.burpsuite-mcp-bridge.env]
+BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"
+```
+
+WSL NAT example:
+
+```toml
+[mcp_servers.burpsuite-mcp-bridge]
+command = "python3"
+args = ["/mnt/d/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+
+[mcp_servers.burpsuite-mcp-bridge.env]
+BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
+```
+
+See `config-examples/` for WSL mirrored, WSL NAT, Windows, and macOS variants.
+
+---
+
+## Core MCP tools
+
+### Status and help
+
+- `burp_bridge_status`
+- `burp_config_get`
+- `burp_mcp_list`
+
+### Target and traffic
+
+- `burp_target_overview`
+- `burp_live_poll`
+- `burp_live_overview`
+- `burp_history_search`
+- `burp_logger_poll`
+- `burp_logger_overview`
+- `burp_extension_activity_overview`
+- `burp_selection_poll`
+- `burp_flow_get`
+- `burp_logger_flow_get`
+- `burp_selection_get`
+
+### Replay and evidence
+
+- `burp_replay_flow`
+- `burp_send_raw_request`
+- `burp_send_to_repeater`
+- `burp_export_flow`
+- `burp_export_flow_bundle`
+
+### Automation
+
+- `burp_rules_list`
+- `burp_rule_upsert`
+- `burp_rule_delete`
+- `burp_bcheck_import`
+- `burp_bambda_import`
+
+---
+
+## Recommended workflow
+
+1. Start with `burp_target_overview(host="target.example")`.
+2. Inspect one candidate flow with the matching getter:
+   - `burp_flow_get(..., source="history" | "live")`
+   - `burp_logger_flow_get(...)`
+   - `burp_selection_get(...)`
+3. Replay one controlled mutation with `burp_replay_flow`.
+4. Export decisive raw evidence with `burp_export_flow_bundle`.
+5. If a behavior is reusable, promote it to a rewrite rule, BCheck, or Bambda.
+
+---
+
+## Body handling
+
+JSON detail calls inline body previews only. Large bodies are capped to avoid MCP context bloat and Burp/UI pressure. For full raw request/response bytes, use:
+
+```python
+burp_export_flow_bundle(flow_id=123, source="history")
+```
+
+---
+
+## Optional Streamable HTTP MCP
+
+The default release examples use stdio MCP. If you need Streamable HTTP, start it manually:
+
+```bash
+BURP_MCP_BRIDGE_URL=http://127.0.0.1:9639 \
+python3 wsl-mcp/server.py --transport streamable-http --host 127.0.0.1 --port 9640 --path /mcp
+```
+
+Default URL:
 
 ```text
 http://127.0.0.1:9640/mcp
 ```
-
----
-
-## Which transport should you choose?
-
-| Use case | Recommended transport |
-|---|---|
-| Codex in WSL | **stdio MCP** |
-| Windows MCP CLI | **stdio MCP** |
-| IDE or agent framework that prefers URL endpoints | **Streamable HTTP MCP** |
-| Cross-tool local debugging | **Streamable HTTP MCP** |
-| Simplest first setup | **stdio MCP** |
-
----
-
-## Supported workflows
-
-### Proxy traffic
-- low-noise live polling
-- selective history search
-- per-flow detail retrieval
-- safe evidence export
-
-### Internal Burp traffic
-Logger-like capture for:
-- Repeater
-- Intruder
-- Scanner
-- Burp-internal HTTP requests issued by extensions or replay workflows
-
-### AI-assisted operations
-- replay captured requests with header/path/body mutations
-- temporary request rewrite rules
-- temporary response rewrite rules
-- Repeater handoff for manual follow-up
-
----
-
-## Example MCP client configurations
-
-See:
-
-- `config-examples/codex-config.toml`
-- `config-examples/codex-config-windows.toml`
-- `config-examples/codex-config-http.toml`
-- `config-examples/codex-config-http-windows.toml`
-- `config-examples/vscode-mcp.json`
-
----
-
-## Codex WSL CLI configuration tutorial
-
-This is the recommended first setup for:
-
-- **Windows Burp Suite**
-- **Codex running inside WSL**
-
-### Step 1 — Place this release directory somewhere stable
-
-Example:
-
-```text
-/mnt/d/tools/burpsuite-mcp-bridge-release
-```
-
-### Step 2 — Load the Burp extension
-
-In Burp, load:
-
-```text
-burp-plugin/burpsuite-mcp-bridge-latest.jar
-```
-
-Recommended Burp Bridge settings:
-
-- Bind host: `127.0.0.1`
-- Port: `9639`
-
-### Step 3 — Install MCP runtime dependencies inside WSL
-
-```bash
-cd /mnt/d/tools/burpsuite-mcp-bridge-release
-python3 -m pip install -r requirements-wsl.txt
-```
-
-### Step 4 — Verify Burp bridge connectivity
-
-```bash
-cd /mnt/d/tools/burpsuite-mcp-bridge-release
-./scripts/check_bridge.sh
-```
-
-You should see a healthy response for:
-
-```text
-http://127.0.0.1:9639/health
-```
-
-### Step 5 — Add MCP config to Codex
-
-Edit:
-
-```text
-~/.codex/config.toml
-```
-
-Append a block like this:
-
-```toml
-[mcp_servers.burpsuite-mcp-bridge]
-command = "bash"
-args = ["/mnt/d/tools/burpsuite-mcp-bridge-release/scripts/run_wsl_mcp.sh"]
-
-[mcp_servers.burpsuite-mcp-bridge.env]
-BURP_MCP_BRIDGE_PORT = "9639"
-```
-
-If you prefer URL-based MCP instead of stdio, first start:
-
-```bash
-cd /mnt/d/tools/burpsuite-mcp-bridge-release
-BURP_MCP_BRIDGE_PORT=9639 BURP_MCP_SERVER_PORT=9640 ./scripts/run_wsl_mcp_http.sh
-```
-
-Then use:
-
-```toml
-[mcp_servers.burpsuite-mcp-bridge]
-url = "http://127.0.0.1:9640/mcp"
-```
-
-### Step 6 — Restart Codex
-
-After restarting Codex, the bridge should be available as a normal MCP server.
-
-Recommended first checks from the client side:
-
-- `burp_bridge_status`
-- `burp_live_poll`
-- `burp_history_search`
-
-### Why this setup is useful
-
-- Burp stays on Windows where browser and desktop tooling are easiest to manage
-- Codex stays in WSL where shell tooling is strongest
-- MCP traffic stays simple and local
-- No extra Burp proxy-jar workflow is required
-
----
-
-## Operational notes
-
-- Burp bridge default: `http://127.0.0.1:9639`
-- Streamable HTTP MCP default: `http://127.0.0.1:9640/mcp`
-- The Burp bridge accepts **loopback connections only** by default.
-- Standard list views return **preview-first body data** rather than full-body inline dumps.
-- Full raw request/response bundles can be exported when needed.
-- Worker pool and queue are bounded to reduce the chance that MCP-side traffic amplifies Burp stalls.
-
----
-
-## Feedback and community
-
-Issues and improvement suggestions are welcome. If you hit a bridge problem, transport mismatch, Burp compatibility issue, or a useful Agent-AI workflow idea, feel free to open an issue.
-
-When reporting problems, it helps to include:
-
-- Burp version
-- MCP transport used (`stdio` or `Streamable HTTP`)
-- client type (`Codex`, IDE, CLI, agent framework, etc.)
-- whether the target flow was Proxy traffic or internal logger-like traffic
-- the smallest reproducible setup
-
----
-
-## Tested baseline
-
-- Burp Suite Professional `2025.10.3`
-- Target compatibility: Burp / Montoya API versions from the 2025 line onward
-
----
-
-## Repository layout
-
-```text
-burpsuite-mcp-bridge-release/
-├─ .codex-plugin/
-├─ .mcp.json
-├─ README.md
-├─ README_CN.md
-├─ CHANGELOG.md
-├─ CHANGELOG_CN.md
-├─ NOTICE.txt
-├─ NOTICE_CN.txt
-├─ requirements-wsl.txt
-├─ assets/
-├─ artifacts/
-├─ burp-plugin/
-├─ config-examples/
-├─ scripts/
-└─ wsl-mcp/
-```
-
----
-
-## Before you publish
-
-Review and update:
-
-- `.codex-plugin/plugin.json`
-- homepage / repository / support URLs
-- organization branding and contact information

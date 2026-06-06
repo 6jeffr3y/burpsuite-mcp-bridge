@@ -2,94 +2,50 @@
 
 [English](./README.md) | 简体中文
 
-**让 Windows Burp Suite 与 WSL / Windows Agent-AI / Codex / MCP CLI / IDE 进行简单配置即可通信。**
+**把 Burp Suite 的流量、重放、改写规则、UI 选中消息和证据导出能力接入 MCP / Codex / AI Agent。**
 
-BurpSuite MCP Bridge 面向真实使用场景设计：Burp 跑在 Windows，而 AI Agent、CLI、IDE 或 Codex 需要快速、低噪声地读取流量、执行改包重放，并进行自动化联调。
-
----
-
-## 为什么这个项目有优势
-
-### 配置简单，接入直接
-- 加载 **一个 Burp JAR**
-- 启动 **一个 MCP Runtime**
-- 从 **WSL**、**Windows**、**Codex**、**Agent-AI**、**IDE**、**MCP CLI** 直接接入
-
-### 面向混合环境
-- **Windows Burp + WSL Codex**
-- **Windows Burp + Windows MCP 客户端**
-- **Proxy 流量 + Burp 内部 HTTP 工具流量**
-
-### 面向 Agent AI 工作流
-- 低噪声轮询
-- 安全改包重放
-- 临时请求 / 响应改写规则
-- Repeater 联动
-- 大响应体场景下导出完整原始包
+本项目面向真实混合环境：Burp 可以跑在 Windows，Codex/AI Agent 可以跑在 WSL、Windows 或 macOS。默认使用 stdio MCP，并在 TOML 中用一个完整 URL 指向 Burp 扩展 bridge。
 
 ---
 
-## 功能速览
+## v1.1.0 新增内容
 
-| 领域 | 能力 |
-|---|---|
-| Burp 流量 | 实时 Proxy 轮询、历史搜索、按 flow 拉详情 |
-| Burp 内部工具流量 | Repeater、Intruder、Scanner、扩展 / replay 产生的 logger-like HTTP 流量 |
-| AI 联调 | 改 header/path/body 后重放、临时 request/response rewrite |
-| 安全与稳定性 | loopback-only bridge、有界 worker/queue、preview-first body、raw bundle 导出 |
-| MCP 传输 | **stdio MCP** + **Streamable HTTP MCP** |
-| 目标环境 | WSL、Windows CLI、IDE、Agent-AI 客户端 |
+- 统一 MCP 返回和错误结构。
+- 改写规则动作真正落地：`modify`、`drop`、`spoof`。
+- 规则作用面支持：`proxy`、`tool`、`all`。
+- 接入 Burp 2026.4.x 运行时能力：
+  - command palette / HotKey 捕获 UI selection
+  - 可用时使用官方 internal-tool request drop/spoof
+  - BCheck 导入
+  - Bambda 导入
+- 新增目标视角工作流：`burp_target_overview(host=...)`。
+- 新增分级帮助：`burp_mcp_list(section=..., topic=...)`。
+- 增强 Burp UI：自检状态、MCP 命令速查复制、规则 UX。
+- 简化配置：不再需要 wrapper 脚本。
 
----
-
-## 架构图
-
-```mermaid
-flowchart LR
-    A[MCP Client / IDE / Agent] -->|stdio MCP 或 Streamable HTTP MCP| B[BurpSuite MCP Runtime]
-    B -->|localhost bridge| C[BurpSuite MCP Bridge Extension]
-    C --> D[Burp Proxy Handlers]
-    C --> E[Burp HttpHandler]
-    C --> F[History / Repeater / Internal Replay APIs]
-    D --> G[Proxy 流量]
-    E --> H[内部工具 / 扩展 / fuzz 流量]
-    F --> I[Replay / Rewrite / Export]
-```
-
-### 各层作用
-
-- **Burp 扩展层**
-  - 暴露本地 bridge
-  - 捕获 Proxy 流量
-  - 捕获 Burp 内部 HTTP 工具流量
-  - 执行请求 / 响应自动改写规则
-  - 执行内部 replay 与 Repeater 联动
-- **MCP Runtime 层**
-  - 把 MCP tool call 转换成 bridge 操作
-  - 同时支持 stdio MCP 与 Streamable HTTP MCP
-- **客户端层**
-  - Codex、Agent-AI、IDE、MCP CLI 等都可复用同一套工具能力
+已用 **Burp Suite Professional 2026.4.2** 测试。编译基线仍保持 `montoya-api 2025.10`，新版能力运行时检测，尽量保持兼容。
 
 ---
 
-## 接入流程图
+## 包含文件
 
-```mermaid
-flowchart TD
-    A[在 Burp 中加载 JAR] --> B[启用 Burp MCP Bridge]
-    B --> C[检查 127.0.0.1:9639 是否健康]
-    C --> D{选择一种 MCP 传输方式}
-    D -->|stdio| E[启动 run_wsl_mcp.sh 或 Windows 启动器]
-    D -->|HTTP| F[启动 run_wsl_mcp_http.sh 或 Windows HTTP 启动器]
-    E --> G[客户端通过 command + args 接入]
-    F --> H[客户端通过 http://127.0.0.1:9640/mcp 接入]
-    G --> I[使用 live poll / history / replay / rewrite / export]
-    H --> I
+```text
+burp-plugin/
+  burpsuite-mcp-bridge-1.1.0-all.jar
+  burpsuite-mcp-bridge-latest.jar
+wsl-mcp/
+  server.py
+config-examples/
+  codex-wsl-mirrored.toml
+  codex-wsl-nat.toml
+  codex-windows.toml
+  codex-macos.toml
+requirements-wsl.txt
 ```
 
 ---
 
-## 3 分钟快速开始
+## 快速开始
 
 ### 1）加载 Burp 扩展
 
@@ -99,261 +55,130 @@ flowchart TD
 burp-plugin/burpsuite-mcp-bridge-latest.jar
 ```
 
-推荐 Burp Bridge 设置：
-
-- Bind host: `127.0.0.1`
-- Port: `9639`
-- Max live/logger entries: `1500`
-- Max body preview bytes: `32768`
-- Scope only: `off`
-- Ignore static: `on`
-
-### 2）检查 Bridge 是否连通
-
-```bash
-./scripts/check_bridge.sh
-```
-
-默认 Bridge 地址：
+推荐设置：
 
 ```text
-http://127.0.0.1:9639
+Bind host: 127.0.0.1
+Port: 9639
+Max live/logger entries: 1500
+Max body preview bytes: 32768
+Ignore static: on
 ```
 
-### 3）选择一种 MCP 接入方式
+如果是 WSL NAT，需要把 Burp Bridge 绑定到 Windows 局域网 IP 或 `0.0.0.0`，然后在 `BURP_MCP_BRIDGE_URL` 里使用这个局域网 IP。
 
-#### 方案 A：stdio MCP
-适合需要 `command + args` 的本地接入方式。
+### 2）安装 MCP runtime 依赖
 
-- WSL / Linux
-  - `scripts/run_wsl_mcp.sh`
-- Windows
-  - `scripts/run_windows_mcp.cmd`
-  - `scripts/run_windows_mcp.ps1`
+```bash
+python3 -m pip install -r requirements-wsl.txt
+```
 
-#### 方案 B：Streamable HTTP MCP
-适合 URL 直连 MCP 的客户端和 IDE。
+Windows 环境使用本机 Python 安装同样依赖即可。
 
-- WSL / Linux
-  - `scripts/run_wsl_mcp_http.sh`
-- Windows
-  - `scripts/run_windows_mcp_http.cmd`
-  - `scripts/run_windows_mcp_http.ps1`
+### 3）配置 Codex / MCP
 
-默认 MCP 地址：
+默认 stdio 配置直接启动 `wsl-mcp/server.py`，不需要 wrapper 脚本。
+
+WSL mirrored / 本机 loopback：
+
+```toml
+[mcp_servers.burpsuite-mcp-bridge]
+command = "python3"
+args = ["/mnt/d/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+
+[mcp_servers.burpsuite-mcp-bridge.env]
+BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"
+```
+
+WSL NAT 示例：
+
+```toml
+[mcp_servers.burpsuite-mcp-bridge]
+command = "python3"
+args = ["/mnt/d/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+
+[mcp_servers.burpsuite-mcp-bridge.env]
+BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
+```
+
+更多环境参考 `config-examples/`。
+
+---
+
+## 主要 MCP 工具
+
+### 状态与帮助
+
+- `burp_bridge_status`
+- `burp_config_get`
+- `burp_mcp_list`
+
+### 目标和流量
+
+- `burp_target_overview`
+- `burp_live_poll`
+- `burp_live_overview`
+- `burp_history_search`
+- `burp_logger_poll`
+- `burp_logger_overview`
+- `burp_extension_activity_overview`
+- `burp_selection_poll`
+- `burp_flow_get`
+- `burp_logger_flow_get`
+- `burp_selection_get`
+
+### 重放和证据
+
+- `burp_replay_flow`
+- `burp_send_raw_request`
+- `burp_send_to_repeater`
+- `burp_export_flow`
+- `burp_export_flow_bundle`
+
+### 自动化
+
+- `burp_rules_list`
+- `burp_rule_upsert`
+- `burp_rule_delete`
+- `burp_bcheck_import`
+- `burp_bambda_import`
+
+---
+
+## 推荐工作流
+
+1. 先用 `burp_target_overview(host="target.example")` 做目标画像。
+2. 挑一个候选 flow 拉完整详情：
+   - `burp_flow_get(..., source="history" | "live")`
+   - `burp_logger_flow_get(...)`
+   - `burp_selection_get(...)`
+3. 用 `burp_replay_flow` 一次只改一个变量验证。
+4. 用 `burp_export_flow_bundle` 导出决定性原始证据。
+5. 如果模式可复用，再沉淀成 rewrite rule、BCheck 或 Bambda。
+
+---
+
+## Body 处理
+
+JSON 详情接口只内联 body preview，避免撑爆 MCP 上下文和拖慢 Burp/UI。完整原始请求/响应请使用：
+
+```python
+burp_export_flow_bundle(flow_id=123, source="history")
+```
+
+---
+
+## 可选 Streamable HTTP MCP
+
+默认示例使用 stdio MCP。如需 Streamable HTTP，可手工启动：
+
+```bash
+BURP_MCP_BRIDGE_URL=http://127.0.0.1:9639 \
+python3 wsl-mcp/server.py --transport streamable-http --host 127.0.0.1 --port 9640 --path /mcp
+```
+
+默认 URL：
 
 ```text
 http://127.0.0.1:9640/mcp
 ```
-
----
-
-## 应该选哪种传输方式？
-
-| 场景 | 推荐 |
-|---|---|
-| WSL 里的 Codex | **stdio MCP** |
-| Windows MCP CLI | **stdio MCP** |
-| 需要 URL 接入的 IDE / Agent 框架 | **Streamable HTTP MCP** |
-| 本地多工具联调 | **Streamable HTTP MCP** |
-| 想最快先跑通 | **stdio MCP** |
-
----
-
-## 支持的工作流
-
-### Burp Proxy 流量
-- 低噪声实时轮询
-- 历史搜索
-- 按 flow 拉详情
-- 安全导出证据
-
-### Burp 内部工具流量
-支持读取 logger-like 内部 HTTP 流量，例如：
-- Repeater
-- Intruder
-- Scanner
-- 走 Burp 内部 HTTP 栈的扩展请求或 replay 请求
-
-### AI 联调能力
-- 改 header/path/body 后重放请求
-- 临时请求改写规则
-- 临时响应改写规则
-- 发送到 Repeater 做人工补刀
-
----
-
-## MCP 客户端配置示例
-
-请参考：
-
-- `config-examples/codex-config.toml`
-- `config-examples/codex-config-windows.toml`
-- `config-examples/codex-config-http.toml`
-- `config-examples/codex-config-http-windows.toml`
-- `config-examples/vscode-mcp.json`
-
----
-
-## Codex WSL CLI 配置教程
-
-这是当前最推荐的接入方式之一：
-
-- **Windows 上运行 Burp Suite**
-- **WSL 中运行 Codex CLI**
-
-### 第 1 步：把发布目录放到稳定位置
-
-例如：
-
-```text
-/mnt/d/tools/burpsuite-mcp-bridge-release
-```
-
-### 第 2 步：在 Burp 中加载扩展
-
-加载：
-
-```text
-burp-plugin/burpsuite-mcp-bridge-latest.jar
-```
-
-推荐 Burp Bridge 设置：
-
-- Bind host: `127.0.0.1`
-- Port: `9639`
-
-### 第 3 步：在 WSL 中安装依赖
-
-```bash
-cd /mnt/d/tools/burpsuite-mcp-bridge-release
-python3 -m pip install -r requirements-wsl.txt
-```
-
-### 第 4 步：检查 Burp bridge 是否连通
-
-```bash
-cd /mnt/d/tools/burpsuite-mcp-bridge-release
-./scripts/check_bridge.sh
-```
-
-正常情况下应能访问：
-
-```text
-http://127.0.0.1:9639/health
-```
-
-### 第 5 步：把 MCP 配置写入 Codex
-
-编辑：
-
-```text
-~/.codex/config.toml
-```
-
-追加类似下面的配置：
-
-```toml
-[mcp_servers.burpsuite-mcp-bridge]
-command = "bash"
-args = ["/mnt/d/tools/burpsuite-mcp-bridge-release/scripts/run_wsl_mcp.sh"]
-
-[mcp_servers.burpsuite-mcp-bridge.env]
-BURP_MCP_BRIDGE_PORT = "9639"
-```
-
-如果你希望用 **URL 方式** 而不是 stdio MCP，先启动：
-
-```bash
-cd /mnt/d/tools/burpsuite-mcp-bridge-release
-BURP_MCP_BRIDGE_PORT=9639 BURP_MCP_SERVER_PORT=9640 ./scripts/run_wsl_mcp_http.sh
-```
-
-然后在 Codex 配置里写：
-
-```toml
-[mcp_servers.burpsuite-mcp-bridge]
-url = "http://127.0.0.1:9640/mcp"
-```
-
-### 第 6 步：重启 Codex
-
-重启后，这个桥接就会作为普通 MCP server 出现在客户端里。
-
-推荐先测试这几个工具：
-
-- `burp_bridge_status`
-- `burp_live_poll`
-- `burp_history_search`
-
-### 这种方式为什么适合实际使用
-
-- Burp 留在 Windows，便于浏览器和桌面调试
-- Codex 留在 WSL，便于 shell、脚本和工具链联动
-- MCP 通信链路清晰、简单、本地化
-- 不需要额外套用 Burp 官方的 proxy-jar 工作流
-
----
-
-## 运行说明
-
-- Burp Bridge 默认地址：`http://127.0.0.1:9639`
-- Streamable HTTP MCP 默认地址：`http://127.0.0.1:9640/mcp`
-- Burp Bridge 默认只接受 **loopback 本机请求**
-- 普通列表结果默认返回 **preview-first** 的 body 信息，而不是整包内联
-- 需要完整 request/response 时，可以导出 raw bundle
-- worker pool 和队列有上限，减少 MCP 请求进一步放大 Burp 卡顿的风险
-
----
-
-## 反馈与社区
-
-欢迎提交 Issues、兼容性反馈和改进建议。无论是 bridge 连通问题、MCP 传输方式适配、Burp 版本兼容性，还是你觉得对 Agent-AI 很有价值的工作流建议，都可以直接提 issue。
-
-建议在反馈时附带这些信息：
-
-- Burp 版本
-- 使用的 MCP 传输方式（`stdio` 或 `Streamable HTTP`）
-- 客户端类型（`Codex`、IDE、CLI、agent framework 等）
-- 触发问题的是 Proxy 流量还是内部 logger-like 流量
-- 最小可复现步骤
-
----
-
-## 已验证基线
-
-- Burp Suite Professional `2025.10.3`
-- 目标兼容：2025 以来的 Burp / Montoya API 主线版本
-
----
-
-## 仓库结构
-
-```text
-burpsuite-mcp-bridge-release/
-├─ .codex-plugin/
-├─ .mcp.json
-├─ README.md
-├─ README_CN.md
-├─ CHANGELOG.md
-├─ CHANGELOG_CN.md
-├─ NOTICE.txt
-├─ NOTICE_CN.txt
-├─ requirements-wsl.txt
-├─ assets/
-├─ artifacts/
-├─ burp-plugin/
-├─ config-examples/
-├─ scripts/
-└─ wsl-mcp/
-```
-
----
-
-## 发布前建议检查
-
-请确认以下内容是否已替换为正式信息：
-
-- `.codex-plugin/plugin.json`
-- homepage / repository / support URL
-- 品牌信息与联系方式
