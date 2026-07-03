@@ -3,7 +3,7 @@
 > 面向 Burp Suite 与 Codex / Agent AI / MCP 客户端的本地桥接插件。
 > 当前发布版本：**v2.0.1**；测试基线：**Burp Suite Professional 2026.4.2**；编译基线继续保持 `montoya-api 2025.10`，新能力按运行时检测启用。
 
-BurpSuite MCP Bridge 的目标不是把 Burp UI 完整搬到 AI 上，而是给 AI 一个稳定、低噪声、可复现的统一接口：
+BurpSuite MCP Bridge：
 
 - 快速读取 Burp Proxy / Logger-like / Selection / History 中的关键流量；
 - 以目标 host 为中心做流量画像、注释/颜色标记筛选与候选请求排序；
