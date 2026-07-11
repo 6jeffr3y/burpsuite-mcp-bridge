@@ -1,130 +1,100 @@
 # BurpSuite MCP Bridge
 
-> 面向 Burp Suite 与 Codex / Agent AI / MCP 客户端的本地桥接插件。
-> 当前发布版本：**v2.1.0**；测试基线：**Burp Suite Professional 2026.4.2**；编译基线继续保持 `montoya-api 2025.10`，新能力按运行时检测启用。
+[English](README_EN.md)
 
-BurpSuite MCP Bridge 的目标不是把 Burp UI 完整搬到 AI 上，而是给 AI 一个稳定、低噪声、可复现的统一接口：
+BurpSuite MCP Bridge 通过本地 Model Context Protocol（MCP）接口开放经过筛选的 Burp Suite 工作流。Burp Suite 仍是流量、人工复核和原生工具状态的事实来源；Bridge 负责提供有边界的流量检索、报文读取、重放、证据导出、改写规则以及请求/响应拦截接口。
 
-- 快速读取 Burp Proxy / Logger-like / Selection / History 中的关键流量；
-- 以目标 host 为中心做流量画像、注释/颜色标记筛选与候选请求排序；
-- 对指定流量按 ID 拉完整请求/响应、重放、送 Repeater、导出原始证据；
-- 通过受控 Rewrite Rule、BCheck、Bambda 等接口把 AI 发现转化为 Burp 内可复用的操作。
-- 通过 Burp UI 或 MCP pending queue 暂停请求/响应，修改后再 forward/drop。
+- **当前版本：** `v2.1.0`
+- **验证基线：** Burp Suite Professional `2026.4.2`
+- **Montoya 编译基线：** `2025.10`
+- **Python 基线：** `3.11+`
 
----
+## 设计范围
+
+Bridge 遵循以下约束：
+
+- **Compact-first：** 列表和搜索接口只返回元数据，完整报文按 flow ID 获取。
+- **确定性引用：** flow、rule 和 pending intercept 使用稳定标识，便于复放、审计和证据关联。
+- **有界修改：** Rewrite Rule 与 Intercept 支持命中次数、有效期、自动禁用和超时恢复。
+- **默认本地部署：** 发布示例中的 Burp HTTP Bridge 和可选 Streamable HTTP MCP 均绑定 loopback。
+- **复用 Burp 原生能力：** Repeater、Proxy Intercept、BCheck、Bambda 仍由 Burp Suite 管理，Bridge 不重复实现。
+
+Bridge 作为 Burp Suite 的 MCP 操作层，保持 Burp Suite 对流量、人工复核和原生工具状态的管理职责。自动化操作结果应结合完整请求/响应、后续状态变化和人工复核形成结论。
+
+## 架构
+
+```mermaid
+flowchart LR
+  C[Codex 或其他 MCP 客户端] -->|stdio 或 Streamable HTTP| M[wsl-mcp/server.py]
+  M -->|本地 HTTP JSON API| B[BurpSuite MCP Bridge 扩展]
+  B --> P[Proxy live buffer 与 history]
+  B --> L[Logger-like HTTP 工具流量]
+  B --> S[Selection buffer]
+  B --> R[Repeater、BCheck 与 Bambda]
+  B --> W[Rewrite 与 Intercept 引擎]
+  B --> E[结构化与原始证据导出]
+```
+
+Python MCP server 只承担传输和 schema 适配。流量捕获、规则执行、拦截以及 Burp 集成都由扩展完成。
 
 ## 核心优势与能力
 
-### 1. 低噪声流量读取
+| 模块 | 接口 | 行为 |
+| --- | --- | --- |
+| 状态与配置 | `burp_bridge_status`、`burp_config_get` | 返回 Bridge 状态、运行配置、缓冲区、pending queue 和兼容性信息。 |
+| 目标流量整理 | `burp_target_overview`、`burp_marked_flows` | 按 host 聚合流量，定位人工注释、高亮和相关 flow，不返回完整 body。 |
+| 流量读取 | live、history、logger、selection | 先返回紧凑索引，再按来源读取完整报文。 |
+| 重放 | `burp_replay_flow`、`burp_send_raw_request` | 基于已确认的基线请求执行明确且可核对的单变量修改。 |
+| Burp 联动 | `burp_send_to_repeater` | 将指定报文交给 Repeater 原生界面继续处理。 |
+| Rewrite Rule | modify、drop、spoof、intercept | 对 Proxy、内部 HTTP 工具或两者应用有边界的规则。 |
+| 双向拦截 | Burp 原生模式或 MCP 控制模式 | 暂停匹配的请求/响应并执行人工或程序化决策。 |
+| 扩展导入 | `burp_bcheck_import`、`burp_bambda_import` | 将文件或内容导入 Burp 原生库。 |
+| 证据导出 | 结构化 JSON 或 raw bundle | 导出完整请求/响应，不把大报文直接放入 MCP 返回值。 |
 
-- `live`：Burp Proxy 实时流量缓冲区。
-- `logger`：Burp 内部 HTTP 工具 / Repeater / Scanner / 其他扩展产生的 logger-like 流量。
-- `selection`：Burp UI 右键 / HotKey / command palette 捕获给 AI 的一次性流量。
+### 流量来源
+
+- `live`：扩展维护的有界 Proxy 实时流量缓冲区。
 - `history`：按条件检索 Burp Proxy History。
+- `logger`：来自 Repeater、Scanner、其他扩展和 Burp HTTP 工具的 logger-like 流量。
+- `selection`：通过 Burp 右键菜单、HotKey 或 command palette 捕获的一次性报文。
 
-默认检索接口采用 **compact-first**：先返回 `id`、`method`、`host`、`path`、`status`、body 长度、注释/颜色等关键字段；需要完整包时再调用对应 detail 接口，避免上下文被大包撑爆。
+搜索和 overview 接口返回 flow ID、method、host、path、status、body 长度、comment 和 highlight 等字段。确定候选 flow 后再读取完整请求/响应。
 
-### 2. Ignore asset responses / 忽略低价值静态响应
+### 静态响应过滤
 
-Burp 插件 UI 中的选项：
+**Ignore asset responses / 忽略低价值静态响应** 只抑制低价值静态响应，保留对应请求。图片、字体、音视频、图标、CSS、PDF 和压缩包可被过滤；JavaScript、SourceMap 和 WebAssembly 保留。
 
-```text
-Capture Policy -> Ignore asset responses / 忽略低价值静态响应
-```
-
-v2.0 已对应新语义：
-
-- 只过滤低价值静态**响应**，请求仍保留；
-- 过滤范围包括图片、字体、音视频、`ico`、`css`、`pdf`、压缩包等；
-- **不会过滤 JavaScript、SourceMap、WASM**，保留插件扫描、LinkFinder、源码映射分析所需线索；
-- `burp_config_get` 会返回：
+`burp_config_get` 会报告当前策略：
 
 ```text
 ignoreStaticMode = response-noisy-assets-only; requests kept; js/source-map/wasm kept
 ```
 
+### 时间窗口
 
-### 3. 时间窗口搜索 / 排序
+- `burp_history_search` 支持 `time_from`、`time_to` 和 `sort=newest|oldest`。
+- `burp_live_poll`、`burp_logger_poll`、`burp_selection_poll` 支持 `created_from`、`created_to` 和排序参数。
+- `burp_target_overview`、`burp_marked_flows` 会把时间范围应用到选定来源。
 
-v2.0.1 增加时间字段相关操作，适合限定“刚才这一波测试”：
+时间值支持 epoch seconds、epoch milliseconds 或 ISO-8601。
 
-- `burp_history_search`：支持 `time_from`、`time_to`、`sort=newest|oldest`，按 Burp History 的 `time` 过滤；
-- `burp_live_poll` / `burp_logger_poll` / `burp_selection_poll`：支持 `created_from`、`created_to`，按 MCP buffer 的 `createdAt` 过滤；
-- `burp_target_overview` / `burp_marked_flows`：支持 `time_from`、`time_to`，会自动映射到 history time 与 live/logger/selection createdAt；
-- 时间值支持 epoch seconds、epoch milliseconds 或 ISO-8601，例如 `2026-06-06T10:00:00Z`。
+### 拦截模型
 
-### 4. 目标视角与人工标记利用
+`action="intercept"` 可作用于 Proxy request 或 response：
 
-- `burp_target_overview(host=...)`：按 host 聚合 live/history/logger/selection 的高价值候选请求。
-- `burp_marked_flows(host=...)`：读取指定 host 下带注释或高亮颜色的流量索引，适合快速定位 Burp 中人工标记、插件标记或 AI 前一次标记的关键包。
-- 支持从注释中提取 LinkFinder、Sensitive Field、Source Map、Email、Router Push 等信号并参与排序。
+- `intercept_mode="burp"`：消息进入 Burp Proxy Intercept，由测试人员使用原生编辑器处理。
+- `intercept_mode="mcp"`：消息进入有界 pending queue；通过 `burp_intercept_poll` 读取，再使用 `burp_intercept_decide` 执行 `forward`、`replace` 或 `drop`。
 
-### 5. Burp 2026.4.x 官方能力接入
+超过决策超时的 pending 消息会按原文放行；卸载扩展时也会释放全部 pending 消息。一次性验证通常应同时设置精确 host/path、`max_matches=1` 和 `auto_disable=true`。
 
-保持 2025.10 编译基线，运行在 2026.4.x 时自动检测并启用：
-
-- HotKey / command palette / 右键菜单捕获 Selection 给 AI；
-- 内部 HTTP 工具流量可用时使用官方 drop/spoof 能力；
-- BCheck 导入：把 AI 生成或本地文件中的 BCheck 交给 Burp Scanner 官方流程执行；
-- Bambda 导入：把 AI 生成或本地文件中的 Bambda 脚本导入 Burp Bambda Library，由 Burp UI 管理和执行。
-
-### 6. Rewrite Rule 自动化更安全
-
-- 支持 `modify`、`drop`、`spoof` 三类动作；
-- 支持 `proxy`、`tool`、`all` 三类作用面；
-- 支持 `ttl_seconds`、`max_matches`、`auto_disable`；
-- 命中计数内存即时生效，持久化使用 debounce；自动禁用立即持久化，避免并发重放时超过限制。
-
-### 7. 请求/响应双向 Intercept
-
-- `action=intercept` 可匹配 Proxy request 或 response；
-- `intercept_mode=burp`：进入 Burp 原生 Proxy Intercept，由人工编辑和 Forward；
-- `intercept_mode=mcp`：进入 bounded pending queue，由 `burp_intercept_poll` 读取，再由 `burp_intercept_decide` 执行 `forward|replace|drop`；
-- pending 超时自动原样放行，插件卸载时释放全部等待消息；
-- 临时逻辑测试推荐设置 `max_matches=1`，避免连续拦截页面资源。
-
----
-
-## 架构流程图
-
-```mermaid
-flowchart LR
-  A[Codex / Agent AI / MCP Client] -->|stdio MCP| B[wsl-mcp/server.py<br/>FastMCP Server]
-  B -->|HTTP JSON API<br/>BURP_MCP_BRIDGE_URL| C[Burp Extension<br/>Local Bridge]
-  C --> D[Montoya API]
-  D --> E[Proxy Live / History]
-  D --> F[Logger-like HTTP Tools<br/>Repeater / Scanner / Extensions]
-  D --> G[Selection Buffer<br/>HotKey / Right Click]
-  D --> H[Repeater / BCheck / Bambda]
-  C --> I[Rewrite / Intercept Engine<br/>modify / drop / spoof / intercept]
-  C --> J[Evidence Export<br/>JSON / Raw Bundle]
-```
-
-## 推荐 AI 工作流
-
-```mermaid
-flowchart TD
-  S[指定 host 或从最近流量开始] --> O[burp_target_overview]
-  O --> M{是否有人工/插件标记?}
-  M -->|有| MF[burp_marked_flows]
-  M -->|无| P[live/logger/history compact poll]
-  MF --> D[按 flow id 拉 detail]
-  P --> D[按 flow id 拉 detail]
-  D --> R[单次受控 replay / send_raw_request]
-  R --> E[export_flow_bundle 留证]
-  R --> X{需要自动化复用?}
-  X -->|临时拦截/替换| RR[rewrite rule + max_matches/ttl]
-  X -->|扫描检查| BC[BCheck import]
-  X -->|工作流脚本| BA[Bambda import]
-```
-
----
+完整流程见 [docs/intercept-workflow.md](docs/intercept-workflow.md)。
 
 ## 发布包内容
 
 ```text
 burp-plugin/
   burpsuite-mcp-bridge-2.1.0-all.jar
+  burpsuite-mcp-bridge-latest.jar
 wsl-mcp/
   server.py
 skills/
@@ -137,46 +107,46 @@ config-examples/
 requirements-wsl.txt
 .codex-plugin/plugin.json
 .mcp.json
+SHA256SUMS-2.1.0.txt
+bom.json
 ```
 
----
+## 安装
 
-## 快速安装
+### 1. 加载 Burp 扩展
 
-### 1. 加载 Burp 插件
-
-在 Burp Suite 中加载：
+在 Burp Suite 中打开 **Extensions → Installed → Add**，选择 **Java**，加载：
 
 ```text
 burp-plugin/burpsuite-mcp-bridge-2.1.0-all.jar
 ```
 
-推荐默认配置：
+建议初始配置：
 
 ```text
 Bind host: 127.0.0.1
 Port: 9639
 Max live/logger entries: 1500
 Max body preview bytes: 32768
-Ignore asset responses: 按需开启
+Ignore asset responses: 根据任务需要启用
 ```
 
-WSL mirrored、Windows 本机、macOS 本机通常使用 `127.0.0.1`。WSL NAT 场景需要把 `BURP_MCP_BRIDGE_URL` 指到 Windows 局域网 IP。
+Windows、macOS 和 WSL mirrored networking 通常可直接使用 loopback。WSL NAT 需要使用 WSL 可访问的 Windows 地址，并配置相应防火墙规则。
 
-### 2. 安装 MCP server 依赖
+### 2. 安装 Python 依赖
 
 ```bash
 python3 -m pip install -r requirements-wsl.txt
 ```
 
-### 3. 配置 Codex / MCP 客户端
+### 3. 配置 MCP 客户端
 
-WSL mirrored / 本机 loopback 示例：
+本机或 WSL mirrored 示例：
 
 ```toml
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/mnt/d/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+args = ["/path/to/burpsuite-mcp-bridge/wsl-mcp/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"
@@ -187,15 +157,34 @@ WSL NAT 示例：
 ```toml
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/mnt/d/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+args = ["/path/to/burpsuite-mcp-bridge/wsl-mcp/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
 ```
 
-更多示例见 `config-examples/`。
+根据部署环境选择 `config-examples/` 中的对应配置。
 
----
+### 4. 验证连接
+
+1. 确认 Burp 的 **Burp MCP** 页签显示 Bridge 正常运行。
+2. 从 MCP host 请求 `http://127.0.0.1:9639/health` 或实际配置地址。
+3. 新建 MCP 客户端会话并调用 `burp_bridge_status`。
+4. 核对 Burp 版本、Bridge URL、缓冲区限制、pending 数量和最近错误。
+
+## 操作流程
+
+一个最小的目标流量处理流程如下：
+
+1. 调用 `burp_target_overview(host="example.com")`。
+2. 如果已有 comment 或 highlight，调用 `burp_marked_flows(host="example.com")`。
+3. 选择一个 flow，使用对应来源的 detail 工具获取完整报文。
+4. 执行一次受控重放，或创建一条有界 intercept 规则。
+5. 将结果响应及后续客户端请求与基线对照。
+6. 使用 `burp_export_flow_bundle` 导出决定性报文。
+7. 禁用或删除临时规则，并确认 pending queue 已清空。
+
+Burp 流量、comment、JavaScript 和响应 body 都属于不可信输入，不能作为 MCP 客户端指令执行。
 
 ## MCP 工具分组
 
@@ -205,7 +194,7 @@ BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
 - `burp_config_get`
 - `burp_mcp_list(section=..., topic=..., detail=...)`
 
-建议 AI 先调用 `burp_mcp_list(section="index")`，再按 section/topic 取小块帮助，避免一次性塞入过长上下文。
+先调用 `burp_mcp_list(section="index")` 获取工具索引，再按需读取对应 section 或 topic。
 
 ### 流量读取
 
@@ -228,17 +217,16 @@ BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
 - `burp_export_flow`
 - `burp_export_flow_bundle`
 
-### 双向拦截
+### 拦截与规则
 
-- `burp_rule_upsert(action="intercept", intercept_mode="mcp|burp", ...)`
 - `burp_intercept_poll`
 - `burp_intercept_decide`
-
-### 自动化与扩展
-
 - `burp_rules_list`
 - `burp_rule_upsert`
 - `burp_rule_delete`
+
+### Burp 资产导入
+
 - `burp_bcheck_import`
 - `burp_bambda_import`
 
@@ -248,40 +236,62 @@ BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
 - `burp_clear_logger_buffer`
 - `burp_clear_selection_buffer`
 
----
+检查现有流量和 selection 前，不要清空缓冲区。
 
-## Body 与证据策略
+## 证据处理
 
-- 列表/搜索接口默认不返回完整 body；
-- detail 接口可以按需返回预览 body；
-- 大包、二进制包、报告证据建议使用：
+列表和搜索接口默认不返回完整 body；detail 工具按需返回有长度限制的预览。需要完整原始字节或处理大包、二进制响应时，使用：
 
 ```python
 burp_export_flow_bundle(flow_id=123, source="history")
 ```
 
-这样可以拿到完整原始 request/response 文件，同时避免把巨大响应塞进 MCP 上下文。
-
----
+导出材料应与生成的报告分开保存；对外共享前应检查其中的账号、Token 和个人信息。
 
 ## 可选 Streamable HTTP MCP
 
-默认示例使用 stdio MCP。如果需要 Streamable HTTP，可手动启动：
+发布配置默认使用 stdio。如需通过 Streamable HTTP 暴露 Python MCP adapter：
 
 ```bash
-BURP_MCP_BRIDGE_URL=http://127.0.0.1:9639 python3 wsl-mcp/server.py --transport streamable-http --host 127.0.0.1 --port 9640 --path /mcp
+BURP_MCP_BRIDGE_URL=http://127.0.0.1:9639 \
+python3 wsl-mcp/server.py \
+  --transport streamable-http \
+  --host 127.0.0.1 \
+  --port 9640 \
+  --path /mcp
 ```
 
-默认 URL：
+默认端点：
 
 ```text
 http://127.0.0.1:9640/mcp
 ```
 
----
+在没有额外认证和传输安全边界的情况下，不要把 Burp Bridge 或 MCP endpoint 绑定到不可信网络。
 
-## 兼容性说明
+## 兼容性与发布完整性
 
-- 编译基线：`montoya-api 2025.10`
-- 当前实测：Burp Suite Professional `2026.4.2`
-- 2026.4.x 新能力均按运行时检测启用；不可用时保留基础功能，不强制依赖新 API。
+扩展以 Montoya API `2025.10` 为编译基线。Burp 后续版本增加的可选 API 仅在运行时能力检测通过后启用。验证矩阵见 [docs/compatibility.md](docs/compatibility.md)。
+
+安装前校验发布文件：
+
+```bash
+sha256sum -c SHA256SUMS-2.1.0.txt
+```
+
+CycloneDX 软件物料清单位于 `bom.json`。
+
+## 文档
+
+- [v2.1.0 发布说明](RELEASE_NOTES_v2.1.0.md)
+- [双向拦截操作手册](docs/intercept-workflow.md)
+- [兼容性说明](docs/compatibility.md)
+- [更新日志](CHANGELOG.md)
+- [安全策略](SECURITY.md)
+- [贡献说明](CONTRIBUTING.md)
+
+## 安全与许可证
+
+本软件仅用于已获得明确授权的测试范围。Bridge 或扩展自身的安全问题按 [SECURITY.md](SECURITY.md) 提交。
+
+发布文件适用 [LICENSE](LICENSE) 中的条款。

@@ -54,9 +54,9 @@ burp_replay_flow(
 )
 ```
 
-## Selection handoff
+## Selection capture
 
-In Burp, use **Burp MCP Bridge: Capture selection for AI**, then:
+In Burp, use **Burp MCP Bridge: Capture selection**, then:
 
 ```python
 burp_selection_poll(limit=20, include_bodies=False)

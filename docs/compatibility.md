@@ -1,14 +1,22 @@
-# Compatibility
+# 兼容性
 
-| Component | Baseline |
-|---|---|
+[English](compatibility_EN.md)
+
+| 组件 | 基线 |
+| --- | --- |
 | Burp Suite | Professional 2026.4.2 |
 | Java | 21 |
-| Montoya compile API | 2025.10 |
+| Montoya 编译 API | 2025.10 |
 | Python | 3.11+ |
-| MCP transport | stdio; optional Streamable HTTP |
+| MCP transport | stdio；可选 Streamable HTTP |
 
-The extension compiles against Montoya 2025.10 and enables newer optional APIs
-through runtime capability checks. A release is not complete until request and
-response capture, replay, native Burp intercept, MCP pending intercept, rule
-auto-disable, and unload cleanup pass on Burp 2026.4.2.
+扩展以 Montoya `2025.10` 为编译基线，并通过运行时能力检测启用后续版本中的可选 API。
+
+发布前必须在 Burp Suite Professional `2026.4.2` 上验证以下路径：
+
+- request/response 捕获；
+- flow detail 和重放；
+- Burp 原生 Intercept；
+- MCP pending intercept；
+- rule auto-disable；
+- timeout 和 unload 清理。

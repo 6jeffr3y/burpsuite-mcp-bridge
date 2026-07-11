@@ -1,5 +1,3 @@
 __pycache__/
 *.pyc
-artifacts/*
-!artifacts/.gitkeep
 *.log

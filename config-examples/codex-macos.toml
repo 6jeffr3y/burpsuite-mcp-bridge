@@ -3,7 +3,7 @@
 # Replace the path with your local clone path.
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/Users/you/AI_project/burpsuite-mcp-bridge-release/wsl-mcp/server.py"]
+args = ["/Users/you/Tools/burpsuite-mcp-bridge/wsl-mcp/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"

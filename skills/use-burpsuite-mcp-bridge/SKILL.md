@@ -25,7 +25,7 @@ Use Burp as the runtime source of truth. Prefer compact indexes and one decisive
 Use this source mapping:
 
 | Source | Detail |
-|---|---|
+| --- | --- |
 | `history`, `live` | `burp_flow_get` |
 | `logger` | `burp_logger_flow_get` |
 | `selection` | `burp_selection_get(consume=False)` while iterating |
@@ -40,7 +40,7 @@ Use an intercept when the browser must receive the modified message.
 
 1. Create a narrow rule with `action="intercept"`, exact host/path, `max_matches=1`, and `auto_disable=True`.
 2. Choose `intercept_mode="burp"` for native Proxy Intercept editing.
-3. Choose `intercept_mode="mcp"` for Agent control.
+3. Choose `intercept_mode="mcp"` when the MCP client must retrieve and decide the pending message.
 4. For MCP mode, trigger the browser request, immediately call `burp_intercept_poll(include_bodies=True)`, then call `burp_intercept_decide` with `forward`, `replace`, or `drop`.
 5. For `replace`, change one response field, status, header, or body fragment. Observe the browser's next request before drawing a conclusion.
 6. Confirm the rule auto-disabled or delete it after the experiment.
