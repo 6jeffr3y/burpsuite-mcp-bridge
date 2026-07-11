@@ -1,18 +1,19 @@
 # BurpSuite MCP Bridge
 
 > 面向 Burp Suite 与 Codex / Agent AI / MCP 客户端的本地桥接插件。
-> 当前发布版本：**v2.0.1**；测试基线：**Burp Suite Professional 2026.4.2**；编译基线继续保持 `montoya-api 2025.10`，新能力按运行时检测启用。
+> 当前发布版本：**v2.1.0**；测试基线：**Burp Suite Professional 2026.4.2**；编译基线继续保持 `montoya-api 2025.10`，新能力按运行时检测启用。
 
-BurpSuite MCP Bridge：
+BurpSuite MCP Bridge 的目标不是把 Burp UI 完整搬到 AI 上，而是给 AI 一个稳定、低噪声、可复现的统一接口：
 
 - 快速读取 Burp Proxy / Logger-like / Selection / History 中的关键流量；
 - 以目标 host 为中心做流量画像、注释/颜色标记筛选与候选请求排序；
 - 对指定流量按 ID 拉完整请求/响应、重放、送 Repeater、导出原始证据；
 - 通过受控 Rewrite Rule、BCheck、Bambda 等接口把 AI 发现转化为 Burp 内可复用的操作。
+- 通过 Burp UI 或 MCP pending queue 暂停请求/响应，修改后再 forward/drop。
 
 ---
 
-## v2.0 重点能力
+## 核心优势与能力
 
 ### 1. 低噪声流量读取
 
@@ -74,6 +75,14 @@ v2.0.1 增加时间字段相关操作，适合限定“刚才这一波测试”�
 - 支持 `ttl_seconds`、`max_matches`、`auto_disable`；
 - 命中计数内存即时生效，持久化使用 debounce；自动禁用立即持久化，避免并发重放时超过限制。
 
+### 7. 请求/响应双向 Intercept
+
+- `action=intercept` 可匹配 Proxy request 或 response；
+- `intercept_mode=burp`：进入 Burp 原生 Proxy Intercept，由人工编辑和 Forward；
+- `intercept_mode=mcp`：进入 bounded pending queue，由 `burp_intercept_poll` 读取，再由 `burp_intercept_decide` 执行 `forward|replace|drop`；
+- pending 超时自动原样放行，插件卸载时释放全部等待消息；
+- 临时逻辑测试推荐设置 `max_matches=1`，避免连续拦截页面资源。
+
 ---
 
 ## 架构流程图
@@ -87,7 +96,7 @@ flowchart LR
   D --> F[Logger-like HTTP Tools<br/>Repeater / Scanner / Extensions]
   D --> G[Selection Buffer<br/>HotKey / Right Click]
   D --> H[Repeater / BCheck / Bambda]
-  C --> I[Rewrite Rule Engine<br/>modify / drop / spoof]
+  C --> I[Rewrite / Intercept Engine<br/>modify / drop / spoof / intercept]
   C --> J[Evidence Export<br/>JSON / Raw Bundle]
 ```
 
@@ -115,11 +124,11 @@ flowchart TD
 
 ```text
 burp-plugin/
-  burpsuite-mcp-bridge-2.0.1-all.jar
-  burpsuite-mcp-bridge-2.0-all.jar
-  burpsuite-mcp-bridge-latest.jar
+  burpsuite-mcp-bridge-2.1.0-all.jar
 wsl-mcp/
   server.py
+skills/
+  use-burpsuite-mcp-bridge/
 config-examples/
   codex-wsl-mirrored.toml
   codex-wsl-nat.toml
@@ -139,7 +148,7 @@ requirements-wsl.txt
 在 Burp Suite 中加载：
 
 ```text
-burp-plugin/burpsuite-mcp-bridge-latest.jar
+burp-plugin/burpsuite-mcp-bridge-2.1.0-all.jar
 ```
 
 推荐默认配置：
@@ -218,6 +227,12 @@ BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
 - `burp_send_to_repeater`
 - `burp_export_flow`
 - `burp_export_flow_bundle`
+
+### 双向拦截
+
+- `burp_rule_upsert(action="intercept", intercept_mode="mcp|burp", ...)`
+- `burp_intercept_poll`
+- `burp_intercept_decide`
 
 ### 自动化与扩展
 

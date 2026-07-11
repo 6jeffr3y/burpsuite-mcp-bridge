@@ -109,6 +109,10 @@ _HIGHLIGHT_WEIGHTS = {
     "GRAY": 3,
 }
 _TARGET_SOURCE_ORDER = ("history", "live", "logger", "selection")
+_TARGET_FOCUS_VALUES = {"default", "auth", "logic", "upload", "data"}
+_LOGIC_FIELD_RE = re.compile(
+    r'(?i)["\'](?P<field>(?:is_?)?admin|authorized|allowed|success|verified|approved|enabled|permission|permissions|role|status|can_[a-z0-9_]+|can[A-Z][a-zA-Z0-9_]*)["\']\s*:\s*(?P<value>true|false|null|-?\d+|["\'][^"\']{0,80}["\'])'
+)
 
 
 def _parse_source_csv(sources: str | None, default: tuple[str, ...] = _TARGET_SOURCE_ORDER) -> list[str]:
@@ -336,7 +340,41 @@ def _add_annotation_score(item: dict[str, Any], add) -> None:
         add(6, "annotation:api")
 
 
-def _score_target_flow(item: dict[str, Any]) -> tuple[int, list[str]]:
+def _logic_response_signals(response_text: str | None) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    if not response_text:
+        return [], []
+    signals: list[dict[str, str]] = []
+    ideas: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for match in _LOGIC_FIELD_RE.finditer(response_text[:131072]):
+        field = match.group("field")
+        value = match.group("value")
+        key = (field.lower(), value.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        signals.append({"field": field, "value": value})
+        normalized = value.strip("\"'").lower()
+        replacement: Any | None = None
+        if normalized == "false":
+            replacement = True
+        elif normalized == "0" and any(token in field.lower() for token in ("admin", "allow", "success", "verif", "approv", "enable", "can")):
+            replacement = 1
+        elif normalized in {"denied", "forbidden", "unauthorized", "failed", "fail"}:
+            replacement = "success"
+        if replacement is not None:
+            ideas.append({
+                "field": field,
+                "from": value,
+                "to": replacement,
+                "reason": "response-controlled client logic candidate; validate with a one-match response intercept",
+            })
+        if len(signals) >= 20:
+            break
+    return signals, ideas[:8]
+
+
+def _score_target_flow(item: dict[str, Any], focus: str = "default", response_text: str | None = None) -> tuple[int, list[str]]:
     score = 0
     reasons: list[str] = []
 
@@ -394,6 +432,34 @@ def _score_target_flow(item: dict[str, Any]) -> tuple[int, list[str]]:
         tool = str(item.get("toolType"))
         if tool.lower() in {"scanner", "extensions", "intruder", "repeater"}:
             add(3, f"burp tool:{tool}")
+
+    normalized_focus = focus if focus in _TARGET_FOCUS_VALUES else "default"
+    if normalized_focus == "auth":
+        if any(k in haystack for k in ("login", "auth", "oauth", "sso", "token", "session", "role", "permission", "user")):
+            add(14, "focus:auth identity/session surface")
+        if status_int in {200, 302, 401, 403}:
+            add(5, "focus:auth boundary response")
+    elif normalized_focus == "logic":
+        logic_terms = (
+            "approve", "audit", "verify", "check", "status", "state", "pay", "order", "member", "vip",
+            "role", "permission", "admin", "enable", "activate", "bind", "confirm", "success",
+            "审核", "审批", "支付", "订单", "会员", "权限", "状态", "验证", "确认",
+        )
+        if any(k in haystack for k in logic_terms):
+            add(15, "focus:logic state/decision endpoint")
+        if method in {"POST", "PUT", "PATCH"}:
+            add(8, "focus:logic state transition request")
+        if status_int in {200, 201, 202, 400, 401, 403, 409, 422}:
+            add(4, "focus:logic business decision response")
+        signals, _ = _logic_response_signals(response_text)
+        if signals:
+            add(18 + min(20, len(signals) * 2), f"focus:logic response control fields({len(signals)})")
+    elif normalized_focus == "upload":
+        if any(k in haystack for k in ("upload", "import", "attach", "file", "avatar", "multipart")):
+            add(16, "focus:upload file-handling surface")
+    elif normalized_focus == "data":
+        if any(k in haystack for k in ("list", "detail", "query", "search", "download", "export", "report", "document", "record")):
+            add(12, "focus:data read/export surface")
 
     return score, reasons
 
@@ -631,6 +697,73 @@ def burp_selection_get(flow_id: int, include_bodies: bool = True, consume: bool 
 
 
 @mcp.tool()
+def burp_intercept_poll(
+    after_seq: int = 0,
+    direction: str = "all",
+    limit: int = 20,
+    include_bodies: bool = False,
+) -> dict[str, Any]:
+    """读取等待 MCP 决策的 Proxy 请求/响应。需要编辑完整内容时令 include_bodies=True。"""
+    if direction not in {"all", "request", "response"}:
+        raise ValueError("direction 必须是 all、request 或 response")
+    return _request_json(
+        "/api/intercepts",
+        query={"afterSeq": after_seq, "direction": direction, "limit": limit, "includeBodies": include_bodies},
+    )
+
+
+@mcp.tool()
+def burp_intercept_decide(
+    intercept_id: str,
+    action: str = "forward",
+    method: str | None = None,
+    path: str | None = None,
+    target_host: str | None = None,
+    target_port: int | None = None,
+    use_https: bool | None = None,
+    headers: dict[str, str] | None = None,
+    add_headers: dict[str, str] | None = None,
+    remove_headers: list[str] | None = None,
+    body: Any | None = None,
+    path_replace_from: str | None = None,
+    path_replace_to: str | None = None,
+    body_replace_from: str | None = None,
+    body_replace_to: str | None = None,
+    status_code: int | None = None,
+    reason_phrase: str | None = None,
+) -> dict[str, Any]:
+    """对 pending intercept 执行 forward、replace 或 drop；replace 复用 replay/rule 的结构化改包字段。"""
+    if action not in {"forward", "replace", "drop"}:
+        raise ValueError("action 必须是 forward、replace 或 drop")
+    payload: dict[str, Any] = {"action": action}
+    if action == "replace":
+        payload.update(
+            _edits_payload(
+                method=method,
+                path=path,
+                target_host=target_host,
+                target_port=target_port,
+                use_https=use_https,
+                headers=headers,
+                add_headers=add_headers,
+                remove_headers=remove_headers,
+                body=body,
+                path_replace_from=path_replace_from,
+                path_replace_to=path_replace_to,
+                body_replace_from=body_replace_from,
+                body_replace_to=body_replace_to,
+                status_code=status_code,
+                reason_phrase=reason_phrase,
+            )
+        )
+    return _request_json(
+        f"/api/intercepts/{urllib.parse.quote(intercept_id, safe='')}/decision",
+        method="POST",
+        payload=payload,
+    )
+
+
+@mcp.tool()
 def burp_history_search(
     query: str | None = None,
     regex: bool = False,
@@ -820,8 +953,11 @@ def burp_target_overview(
     include_static: bool = False,
     include_extensions: bool = True,
     candidate_limit: int = 20,
+    focus: str = "default",
 ) -> dict[str, Any]:
-    """按被测目标聚合 live/history/logger/selection 流量。适合 AI 围绕一个 host 做入口、接口、状态码和高价值候选请求画像。"""
+    """按目标聚合流量并给出可解释候选评分。focus 支持 default/auth/logic/upload/data。"""
+    if focus not in _TARGET_FOCUS_VALUES:
+        raise ValueError("focus 必须是 default、auth、logic、upload 或 data")
     selected_sources = _parse_source_csv(sources)
     per_source_limit = max(1, min(limit, 200))
     max_candidates = max(1, min(candidate_limit, 50))
@@ -927,7 +1063,7 @@ def burp_target_overview(
         by_endpoint[endpoint_key] += 1
         endpoint_samples.setdefault(endpoint_key, _flow_card(item))
 
-        score, reasons = _score_target_flow(item)
+        score, reasons = _score_target_flow(item, focus=focus)
         if score > 0:
             key = (source, item.get("flowId"))
             if key in seen_candidate_keys:
@@ -936,6 +1072,36 @@ def burp_target_overview(
             interesting.append(_flow_card(item, source=source, reasons=reasons, score=score))
 
     interesting.sort(key=lambda card: (-int(card.get("score") or 0), str(card.get("source")), int(card.get("flowId") or 0)))
+    if focus == "logic":
+        for card in interesting[: min(len(interesting), max(8, max_candidates))]:
+            flow_id = card.get("flowId")
+            source = str(card.get("source") or "history")
+            if flow_id is None:
+                continue
+            try:
+                if source == "logger":
+                    detail = burp_logger_flow_get(flow_id=int(flow_id), include_bodies=True)
+                elif source == "selection":
+                    detail = burp_selection_get(flow_id=int(flow_id), include_bodies=True, consume=False)
+                else:
+                    detail = burp_flow_get(flow_id=int(flow_id), source=source, include_bodies=True)
+                detail_item = detail.get("item", detail) if isinstance(detail, dict) else {}
+                response = detail_item.get("response") if isinstance(detail_item, dict) else None
+                response_text = response.get("bodyPreview") if isinstance(response, dict) else None
+                logic_signals, mutation_ideas = _logic_response_signals(str(response_text or ""))
+                if logic_signals:
+                    source_item = next(
+                        (item for item in collected if item.get("flowId") == flow_id and str(item.get("source") or "") == source),
+                        {},
+                    )
+                    score, reasons = _score_target_flow(source_item, focus=focus, response_text=str(response_text or ""))
+                    card["score"] = score
+                    card["reasons"] = reasons
+                    card["logicSignals"] = logic_signals
+                    card["mutationIdeas"] = mutation_ideas
+            except Exception as exc:
+                card["logicDetailError"] = str(exc)
+        interesting.sort(key=lambda card: (-int(card.get("score") or 0), str(card.get("source")), int(card.get("flowId") or 0)))
     top_endpoints = [
         {
             "endpoint": endpoint,
@@ -952,6 +1118,8 @@ def burp_target_overview(
     ]
     if not host:
         next_steps.insert(0, "Pass host='target.example' for a tighter per-unit view; without host this is only a broad recent/history snapshot.")
+    if focus == "logic":
+        next_steps.insert(0, "For a mutationIdea, create a response intercept rule with max_matches=1, poll the pending response, replace one field, then observe the browser's next request.")
 
     return {
         "ok": True,
@@ -967,6 +1135,7 @@ def burp_target_overview(
                 "perSourceLimit": per_source_limit,
                 "includeStatic": include_static,
                 "includeExtensions": include_extensions,
+                "focus": focus,
             },
             "count": len(collected),
             "sourceErrors": source_errors,
@@ -1289,7 +1458,7 @@ def burp_send_raw_request(
 
 @mcp.tool()
 def burp_rules_list() -> dict[str, Any]:
-    """列出当前启用/禁用的自动请求/响应改写规则，包含 actionSchema 说明 modify/drop/spoof 与 applyTo 语义。"""
+    """列出当前启用/禁用的自动请求/响应规则，包含 modify/drop/spoof/intercept 语义。"""
     return _request_json("/api/rules")
 
 
@@ -1298,6 +1467,7 @@ def burp_rule_upsert(
     direction: str,
     action: str = "modify",
     apply_to: str = "proxy",
+    intercept_mode: str = "mcp",
     name: str | None = None,
     rule_id: str | None = None,
     enabled: bool = True,
@@ -1326,19 +1496,24 @@ def burp_rule_upsert(
     max_matches: int | None = None,
     auto_disable: bool | None = None,
 ) -> dict[str, Any]:
-    """新增或更新自动规则。支持 ttl_seconds/max_matches/auto_disable 防遗留；action=modify/drop/spoof；apply_to=proxy/tool/all。"""
+    """新增或更新自动规则。action=modify/drop/spoof/intercept；intercept_mode=mcp|burp。"""
     if direction not in {"request", "response"}:
         raise ValueError("direction 必须是 request 或 response")
-    if action not in {"modify", "drop", "spoof"}:
-        raise ValueError("action 必须是 modify、drop 或 spoof")
+    if action not in {"modify", "drop", "spoof", "intercept"}:
+        raise ValueError("action 必须是 modify、drop、spoof 或 intercept")
     if apply_to not in {"proxy", "tool", "all"}:
         raise ValueError("apply_to 必须是 proxy、tool 或 all")
+    if intercept_mode not in {"mcp", "burp"}:
+        raise ValueError("intercept_mode 必须是 mcp 或 burp")
+    if action == "intercept" and apply_to != "proxy":
+        raise ValueError("intercept 规则当前只支持 apply_to=proxy")
     payload = {
         "id": rule_id,
         "name": name,
         "direction": direction,
         "action": action,
         "applyTo": apply_to,
+        "interceptMode": intercept_mode,
         "enabled": enabled,
         "matchHostContains": match_host_contains,
         "matchPathContains": match_path_contains,
@@ -1460,8 +1635,8 @@ def _mcp_help_catalog() -> dict[str, Any]:
                 "target": {
                     "summary": "Target-centric map across history/live/logger/selection, grouped by host/status/method/tool/endpoint with high-value candidates.",
                     "tools": ["burp_target_overview", "burp_marked_flows", "burp_flow_get", "burp_logger_flow_get", "burp_selection_get"],
-                    "params": {"host": "recommended target host filter", "time_from/time_to": "epoch seconds/ms or ISO-8601; applies to history time and live/logger/selection createdAt", "sources": "all or comma-separated history,live,logger,selection", "include_extensions": "keep plugin-generated target traffic in the same target view"},
-                    "example": "burp_target_overview(host='example.com', time_from='2026-06-06T10:00:00Z', sources='all', limit=80) -> inspect one highValueCandidate",
+                    "params": {"host": "recommended target host filter", "focus": "default|auth|logic|upload|data; logic inspects response control fields from top local candidates", "time_from/time_to": "epoch seconds/ms or ISO-8601; applies to history time and live/logger/selection createdAt", "sources": "all or comma-separated history,live,logger,selection", "include_extensions": "keep plugin-generated target traffic in the same target view"},
+                    "example": "burp_target_overview(host='example.com', focus='logic', sources='all', limit=80) -> inspect mutationIdeas on one highValueCandidate",
                 },
                 "marked_flows": {
                     "summary": "Host-scoped index of Burp comments/notes and highlight colors. Use it to lock onto manually or plugin-marked high-value flows before pulling full bodies.",
@@ -1522,10 +1697,16 @@ def _mcp_help_catalog() -> dict[str, Any]:
             "summary": "Automatic request/response controls with proxy/tool/all scope.",
             "topics": {
                 "actions": {
-                    "summary": "modify/drop/spoof semantics.",
+                    "summary": "modify/drop/spoof/intercept semantics.",
                     "tools": ["burp_rules_list", "burp_rule_upsert", "burp_rule_delete"],
-                    "params": {"action": "modify|drop|spoof", "direction": "request|response", "apply_to": "proxy|tool|all", "ttl_seconds/max_matches": "recommended for temporary validation rules"},
+                    "params": {"action": "modify|drop|spoof|intercept", "direction": "request|response", "apply_to": "proxy|tool|all; intercept currently requires proxy", "intercept_mode": "mcp pending queue or native Burp Proxy Intercept", "ttl_seconds/max_matches": "recommended for temporary validation rules"},
                     "example": "burp_rule_upsert(direction='request', action='spoof', apply_to='proxy', match_host_contains='example.com', body='mock', max_matches=1, ttl_seconds=300)",
+                },
+                "intercept": {
+                    "summary": "Pause one matching Proxy request/response, then forward, replace, or drop it from MCP or Burp UI.",
+                    "tools": ["burp_rule_upsert", "burp_intercept_poll", "burp_intercept_decide", "burp_rules_list"],
+                    "params": {"intercept_mode": "mcp|burp", "max_matches": "use 1 for logic tests", "action": "burp_intercept_decide accepts forward|replace|drop"},
+                    "example": "burp_rule_upsert(direction='response', action='intercept', intercept_mode='mcp', match_host_contains='example.com', match_path_contains='/api/login', max_matches=1) -> burp_intercept_poll(include_bodies=True) -> burp_intercept_decide(intercept_id='...', action='replace', body_replace_from='false', body_replace_to='true')",
                 },
                 "safety": {
                     "summary": "Prevent temporary rewrite/drop/spoof rules from affecting later testing.",

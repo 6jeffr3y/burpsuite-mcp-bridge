@@ -1,5 +1,17 @@
 # 更新日志
 
+## 2.1.0
+
+### 新增
+- 新增 Proxy request/response 双向 `intercept` 规则，支持 `intercept_mode=mcp|burp`。
+- 新增 bounded pending queue、超时自动放行和卸载释放。
+- 新增 `burp_intercept_poll` / `burp_intercept_decide`，支持 `forward|replace|drop`。
+- `burp_target_overview` 新增 `focus=default|auth|logic|upload|data`；logic 模式识别响应控制字段并提供可解释 mutation ideas。
+
+### 工程与界面
+- UI 精简为 Overview / Intercept / Rules，隐藏低频诊断信息和规则 ID。
+- 增加 Java/Python 自动化测试与正式发布工作流；兼容测试基线固定为 Burp Suite Professional 2026.4.2。
+
 ## 2.0.1
 
 ### 修复与增强

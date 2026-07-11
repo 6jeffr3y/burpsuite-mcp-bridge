@@ -1,0 +1,3 @@
+efc986789d3eea8136a0ef95d1697104c02a2a21deb4ed43f07ba891e1e017bf  burp-plugin/burpsuite-mcp-bridge-2.1.0-all.jar
+efc986789d3eea8136a0ef95d1697104c02a2a21deb4ed43f07ba891e1e017bf  burp-plugin/burpsuite-mcp-bridge-latest.jar
+f2b5455e1d97845cb98dc28e6f4ee8b20edcbb5bf9820623eded380c251964a3  bom.json
