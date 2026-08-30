@@ -1,7 +1,11 @@
 BurpSuite MCP Bridge
 
-本发布包包含预编译 Burp 扩展、Python MCP adapter、客户端配置示例和操作文档。
-
-发布示例默认把本地服务绑定到 loopback。适配其他环境前，应检查 bind 地址、防火墙规则、认证边界以及导出流量中的敏感信息。
+本发布包包含预编译 Burp 扩展、Python MCP adapter、客户端配置示例和操作文档。发布示例默认把本地服务绑定到 loopback。适配其他环境前，应检查 bind 地址、防火墙规则、认证边界以及导出流量中的敏感信息。
 
 Burp Suite 与 Montoya 是 PortSwigger Ltd. 的产品和 API。本项目是独立集成项目，与 PortSwigger Ltd. 不存在隶属或官方背书关系。
+
+---
+
+This distribution contains prebuilt Burp extension artifacts, a Python MCP adapter, client configuration examples, and operating documentation. The supplied configuration binds local services to loopback. Review bind addresses, firewall rules, authentication boundaries, and exported traffic before adapting the package to another environment.
+
+Burp Suite and Montoya are products and APIs of PortSwigger Ltd. This project is an independent integration and is not affiliated with or endorsed by PortSwigger Ltd.

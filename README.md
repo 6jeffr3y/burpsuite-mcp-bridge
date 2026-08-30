@@ -25,7 +25,7 @@ Bridge 作为 Burp Suite 的 MCP 操作层，保持 Burp Suite 对流量、人�
 
 ```mermaid
 flowchart LR
-  C[Codex 或其他 MCP 客户端] -->|stdio 或 Streamable HTTP| M[wsl-mcp/server.py]
+  C[Codex 或其他 MCP 客户端] -->|stdio 或 Streamable HTTP| M[mcp-server/server.py]
   M -->|本地 HTTP JSON API| B[BurpSuite MCP Bridge 扩展]
   B --> P[Proxy live buffer 与 history]
   B --> L[Logger-like HTTP 工具流量]
@@ -92,23 +92,18 @@ ignoreStaticMode = response-noisy-assets-only; requests kept; js/source-map/wasm
 ## 发布包内容
 
 ```text
-burp-plugin/
+dist/
   burpsuite-mcp-bridge-2.1.0-all.jar
-  burpsuite-mcp-bridge-latest.jar
-wsl-mcp/
+  SHA256SUMS
+  bom.cdx.json
+mcp-server/
   server.py
 skills/
   use-burpsuite-mcp-bridge/
 config-examples/
-  codex-wsl-mirrored.toml
-  codex-wsl-nat.toml
-  codex-windows.toml
-  codex-macos.toml
-requirements-wsl.txt
+requirements.txt
 .codex-plugin/plugin.json
 .mcp.json
-SHA256SUMS-2.1.0.txt
-bom.json
 ```
 
 ## 安装
@@ -118,7 +113,7 @@ bom.json
 在 Burp Suite 中打开 **Extensions → Installed → Add**，选择 **Java**，加载：
 
 ```text
-burp-plugin/burpsuite-mcp-bridge-2.1.0-all.jar
+dist/burpsuite-mcp-bridge-2.1.0-all.jar
 ```
 
 建议初始配置：
@@ -136,7 +131,7 @@ Windows、macOS 和 WSL mirrored networking 通常可直接使用 loopback。WSL
 ### 2. 安装 Python 依赖
 
 ```bash
-python3 -m pip install -r requirements-wsl.txt
+python3 -m pip install -r requirements.txt
 ```
 
 ### 3. 配置 MCP 客户端
@@ -146,7 +141,7 @@ python3 -m pip install -r requirements-wsl.txt
 ```toml
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/path/to/burpsuite-mcp-bridge/wsl-mcp/server.py"]
+args = ["/path/to/burpsuite-mcp-bridge/mcp-server/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"
@@ -157,7 +152,7 @@ WSL NAT 示例：
 ```toml
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/path/to/burpsuite-mcp-bridge/wsl-mcp/server.py"]
+args = ["/path/to/burpsuite-mcp-bridge/mcp-server/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
@@ -254,7 +249,7 @@ burp_export_flow_bundle(flow_id=123, source="history")
 
 ```bash
 BURP_MCP_BRIDGE_URL=http://127.0.0.1:9639 \
-python3 wsl-mcp/server.py \
+python3 mcp-server/server.py \
   --transport streamable-http \
   --host 127.0.0.1 \
   --port 9640 \
@@ -276,14 +271,14 @@ http://127.0.0.1:9640/mcp
 安装前校验发布文件：
 
 ```bash
-sha256sum -c SHA256SUMS-2.1.0.txt
+cd dist && sha256sum -c SHA256SUMS
 ```
 
-CycloneDX 软件物料清单位于 `bom.json`。
+CycloneDX 软件物料清单位于 `dist/bom.cdx.json`。
 
 ## 文档
 
-- [v2.1.0 发布说明](RELEASE_NOTES_v2.1.0.md)
+- [v2.1.0 发布说明](docs/releases/v2.1.0.md)
 - [双向拦截操作手册](docs/intercept-workflow.md)
 - [兼容性说明](docs/compatibility.md)
 - [更新日志](CHANGELOG.md)

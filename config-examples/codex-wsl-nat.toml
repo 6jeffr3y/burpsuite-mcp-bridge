@@ -5,7 +5,7 @@
 # Restrict the Windows firewall rule to the required WSL network; do not expose the bridge broadly.
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/mnt/c/Tools/burpsuite-mcp-bridge/wsl-mcp/server.py"]
+args = ["/mnt/c/Tools/burpsuite-mcp-bridge/mcp-server/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"

@@ -1,6 +1,6 @@
 # 兼容性
 
-[English](compatibility_EN.md)
+[English](en/compatibility.md)
 
 | 组件 | 基线 |
 | --- | --- |

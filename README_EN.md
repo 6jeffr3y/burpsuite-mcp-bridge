@@ -25,7 +25,7 @@ The bridge operates as an MCP control layer for Burp Suite while Burp remains re
 
 ```mermaid
 flowchart LR
-  C[Codex or another MCP client] -->|stdio or Streamable HTTP| M[wsl-mcp/server.py]
+  C[Codex or another MCP client] -->|stdio or Streamable HTTP| M[mcp-server/server.py]
   M -->|Local HTTP JSON API| B[BurpSuite MCP Bridge extension]
   B --> P[Proxy live buffer and history]
   B --> L[Logger-like HTTP tool traffic]
@@ -87,28 +87,23 @@ Timestamps may be supplied as epoch seconds, epoch milliseconds, or ISO-8601 val
 
 Pending messages are forwarded unchanged when their decision timeout expires. Unloading the extension also releases all pending messages. One-off tests should normally use an exact host/path match with `max_matches=1` and `auto_disable=true`.
 
-See [docs/intercept-workflow_EN.md](docs/intercept-workflow_EN.md) for the complete procedure.
+See [docs/en/intercept-workflow.md](docs/en/intercept-workflow.md) for the complete procedure.
 
 ## Release contents
 
 ```text
-burp-plugin/
+dist/
   burpsuite-mcp-bridge-2.1.0-all.jar
-  burpsuite-mcp-bridge-latest.jar
-wsl-mcp/
+  SHA256SUMS
+  bom.cdx.json
+mcp-server/
   server.py
 skills/
   use-burpsuite-mcp-bridge/
 config-examples/
-  codex-wsl-mirrored.toml
-  codex-wsl-nat.toml
-  codex-windows.toml
-  codex-macos.toml
-requirements-wsl.txt
+requirements.txt
 .codex-plugin/plugin.json
 .mcp.json
-SHA256SUMS-2.1.0.txt
-bom.json
 ```
 
 ## Installation
@@ -118,7 +113,7 @@ bom.json
 In Burp Suite, open **Extensions → Installed → Add**, choose **Java**, and load:
 
 ```text
-burp-plugin/burpsuite-mcp-bridge-2.1.0-all.jar
+dist/burpsuite-mcp-bridge-2.1.0-all.jar
 ```
 
 Recommended initial settings:
@@ -136,7 +131,7 @@ Loopback normally works for Windows, macOS, and WSL mirrored networking. WSL NAT
 ### 2. Install the Python dependency
 
 ```bash
-python3 -m pip install -r requirements-wsl.txt
+python3 -m pip install -r requirements.txt
 ```
 
 ### 3. Configure the MCP client
@@ -146,7 +141,7 @@ Local or WSL mirrored example:
 ```toml
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/path/to/burpsuite-mcp-bridge/wsl-mcp/server.py"]
+args = ["/path/to/burpsuite-mcp-bridge/mcp-server/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"
@@ -157,7 +152,7 @@ WSL NAT example:
 ```toml
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/path/to/burpsuite-mcp-bridge/wsl-mcp/server.py"]
+args = ["/path/to/burpsuite-mcp-bridge/mcp-server/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://192.168.1.100:9639"
@@ -254,7 +249,7 @@ The supplied configurations use stdio. To expose the Python MCP adapter through 
 
 ```bash
 BURP_MCP_BRIDGE_URL=http://127.0.0.1:9639 \
-python3 wsl-mcp/server.py \
+python3 mcp-server/server.py \
   --transport streamable-http \
   --host 127.0.0.1 \
   --port 9640 \
@@ -271,27 +266,27 @@ Do not bind either endpoint to an untrusted network without an external authenti
 
 ## Compatibility and release integrity
 
-The extension compiles against Montoya API `2025.10`. Optional APIs introduced in later Burp releases are enabled only after runtime capability checks. See [docs/compatibility_EN.md](docs/compatibility_EN.md) for the validation matrix.
+The extension compiles against Montoya API `2025.10`. Optional APIs introduced in later Burp releases are enabled only after runtime capability checks. See [docs/en/compatibility.md](docs/en/compatibility.md) for the validation matrix.
 
 Verify release artifacts before installation:
 
 ```bash
-sha256sum -c SHA256SUMS-2.1.0.txt
+cd dist && sha256sum -c SHA256SUMS
 ```
 
-The CycloneDX software bill of materials is published as `bom.json`.
+The CycloneDX software bill of materials is published as `dist/bom.cdx.json`.
 
 ## Documentation
 
-- [v2.1.0 release notes](RELEASE_NOTES_v2.1.0_EN.md)
-- [Intercept workflow](docs/intercept-workflow_EN.md)
-- [Compatibility](docs/compatibility_EN.md)
-- [Changelog](CHANGELOG_EN.md)
-- [Security policy](SECURITY_EN.md)
-- [Contributing](CONTRIBUTING_EN.md)
+- [v2.1.0 release notes](docs/releases/v2.1.0_EN.md)
+- [Intercept workflow](docs/en/intercept-workflow.md)
+- [Compatibility](docs/en/compatibility.md)
+- [Changelog](docs/en/changelog.md)
+- [Security policy](docs/en/security.md)
+- [Contributing](docs/en/contributing.md)
 
 ## Security and license
 
-Use this software only for systems you are authorized to test. Report bridge or extension vulnerabilities according to [SECURITY.md](SECURITY_EN.md).
+Use this software only for systems you are authorized to test. Report bridge or extension vulnerabilities according to [SECURITY.md](docs/en/security.md).
 
 Release artifacts are distributed under the terms in [LICENSE](LICENSE).

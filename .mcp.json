@@ -3,7 +3,7 @@
     "burpsuite-mcp-bridge": {
       "command": "python3",
       "args": [
-        "./wsl-mcp/server.py"
+        "./mcp-server/server.py"
       ],
       "env": {
         "BURP_MCP_BRIDGE_URL": "http://127.0.0.1:9639"

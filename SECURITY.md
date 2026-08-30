@@ -1,6 +1,6 @@
 # 安全策略
 
-[English](SECURITY_EN.md)
+[English](docs/en/security.md)
 
 如发现可复现的插件或 Bridge 安全缺陷，请在公开披露前通过 `6jeffr3y@users.noreply.github.com` 私下报告。
 

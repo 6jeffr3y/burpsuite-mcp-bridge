@@ -4,6 +4,12 @@
 
 ## 未发布
 
+### 仓库结构
+
+- 将跨平台 Python Adapter 从 `wsl-mcp/` 更名为 `mcp-server/`，并采用常规的 `requirements.txt`。
+- 将 JAR、校验清单与 CycloneDX SBOM 收敛到 `dist/`；删除与版本化 JAR 字节相同的 `latest` 副本。
+- 将英文参考文档集中到 `docs/en/`，版本说明集中到 `docs/releases/`，并合并双语 NOTICE。
+
 ### 文档
 
 - 按设计范围、运行边界、安装、证据处理和发布完整性重写英文与简体中文 README。

@@ -1,6 +1,6 @@
 # 请求与响应双向拦截
 
-[English](intercept-workflow_EN.md)
+[English](en/intercept-workflow.md)
 
 本文档描述 Proxy request/response 的两种拦截路径、最小操作顺序和恢复边界。拦截规则只作用于 Proxy 流量；工具调用成功不代表业务状态或安全影响已经成立。
 

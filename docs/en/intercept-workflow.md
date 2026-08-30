@@ -1,6 +1,6 @@
 # Request and response interception
 
-[简体中文](intercept-workflow.md)
+[简体中文](../intercept-workflow.md)
 
 This document defines the two interception paths, the minimum operating sequence, and the recovery boundaries for Proxy requests and responses. Intercept rules apply only to Proxy traffic. A completed interception operation does not by itself establish a business-state change or security impact.
 

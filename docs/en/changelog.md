@@ -4,6 +4,12 @@ This file records user-visible changes to BurpSuite MCP Bridge.
 
 ## Unreleased
 
+### Repository layout
+
+- Renamed the cross-platform Python adapter from `wsl-mcp/` to `mcp-server/` and adopted the conventional `requirements.txt` name.
+- Colocated the JAR, checksum manifest, and CycloneDX SBOM under `dist/`; removed the byte-identical `latest` JAR alias.
+- Grouped English references under `docs/en/`, release notes under `docs/releases/`, and consolidated NOTICE into one bilingual file.
+
 ### Documentation
 
 - Reworked the English and Simplified Chinese READMEs around design scope, operational boundaries, installation, evidence handling, and release integrity.

@@ -1,6 +1,6 @@
 # 贡献指南
 
-[English](CONTRIBUTING_EN.md)
+[English](docs/en/contributing.md)
 
 本仓库用于发布 BurpSuite MCP Bridge 的版本化构建产物、Python MCP Adapter、客户端配置示例及操作文档，不包含 Burp 扩展的完整构建工程。
 
@@ -11,17 +11,17 @@
 提交前至少执行：
 
 ```bash
-python3 -m py_compile wsl-mcp/server.py
+python3 -m py_compile mcp-server/server.py
 python3 -m json.tool .codex-plugin/plugin.json >/dev/null
 python3 -m json.tool .mcp.json >/dev/null
-sha256sum -c SHA256SUMS-2.1.0.txt
+cd dist && sha256sum -c SHA256SUMS
 ```
 
 ## 运行时变更
 
 运行时功能应在构建工程中完成实现、测试和版本化，再同步到本发布仓库。每次发布必须包含：
 
-- 版本化扩展 JAR，以及内容一致的 `latest` JAR；
+- 不可变的版本化扩展 JAR；
 - 工具 schema 变化时同步更新 Python MCP Adapter；
 - SHA-256 校验清单与 CycloneDX SBOM；
 - 针对文档所列基线版本的兼容性验证；

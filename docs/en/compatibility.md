@@ -1,6 +1,6 @@
 # Compatibility
 
-[简体中文](compatibility.md)
+[简体中文](../compatibility.md)
 
 | Component | Baseline |
 | --- | --- |

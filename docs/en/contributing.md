@@ -1,6 +1,6 @@
 # Contributing
 
-[简体中文](CONTRIBUTING.md)
+[简体中文](../../CONTRIBUTING.md)
 
 This repository publishes versioned BurpSuite MCP Bridge artifacts, the Python
 MCP adapter, client configuration examples, and operating documentation. It
@@ -16,10 +16,10 @@ environment details.
 Run at least:
 
 ```bash
-python3 -m py_compile wsl-mcp/server.py
+python3 -m py_compile mcp-server/server.py
 python3 -m json.tool .codex-plugin/plugin.json >/dev/null
 python3 -m json.tool .mcp.json >/dev/null
-sha256sum -c SHA256SUMS-2.1.0.txt
+cd dist && sha256sum -c SHA256SUMS
 ```
 
 ## Runtime changes
@@ -28,7 +28,7 @@ Runtime changes must be implemented, tested, and versioned in the build project
 before they are synchronized to this release repository. Each release must
 provide:
 
-- a versioned extension JAR and a content-identical `latest` JAR;
+- an immutable, versioned extension JAR;
 - an updated Python MCP adapter when the tool schema changes;
 - SHA-256 checksums and a CycloneDX SBOM;
 - compatibility verification against the documented baseline;

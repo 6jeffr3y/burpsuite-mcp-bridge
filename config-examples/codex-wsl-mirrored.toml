@@ -2,7 +2,7 @@
 # Burp runs on Windows, Codex/MCP runs inside WSL, and 127.0.0.1 reaches Windows Burp.
 [mcp_servers.burpsuite-mcp-bridge]
 command = "python3"
-args = ["/mnt/c/Tools/burpsuite-mcp-bridge/wsl-mcp/server.py"]
+args = ["/mnt/c/Tools/burpsuite-mcp-bridge/mcp-server/server.py"]
 
 [mcp_servers.burpsuite-mcp-bridge.env]
 BURP_MCP_BRIDGE_URL = "http://127.0.0.1:9639"

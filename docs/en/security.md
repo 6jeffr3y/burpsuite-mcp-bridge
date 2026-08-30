@@ -1,6 +1,6 @@
 # Security
 
-[简体中文](SECURITY.md)
+[简体中文](../../SECURITY.md)
 
 Report reproducible plugin or bridge security defects privately to
 `6jeffr3y@users.noreply.github.com` before public disclosure.
