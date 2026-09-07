@@ -102,6 +102,7 @@ skills/
   use-burpsuite-mcp-bridge/
 config-examples/
 requirements.txt
+requirements.lock
 .codex-plugin/plugin.json
 .mcp.json
 ```
@@ -130,8 +131,10 @@ Loopback normally works for Windows, macOS, and WSL mirrored networking. WSL NAT
 
 ### 2. Install the Python dependency
 
+Use a Python 3.12 virtual environment with the cross-platform hash-locked dependencies:
+
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m pip install --require-hashes -r requirements.lock
 ```
 
 ### 3. Configure the MCP client

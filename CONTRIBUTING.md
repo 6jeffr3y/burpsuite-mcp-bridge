@@ -35,3 +35,18 @@ cd dist && sha256sum -c SHA256SUMS
 - 文档中的命令、路径和工具名称必须可复现；
 - 中英文文档应在同一提交中同步；
 - 不提交缓存文件、临时导出、测试流量或未版本化二进制文件。
+
+## 依赖锁定与插件扫描
+
+`requirements.txt` 声明支持的依赖范围；`requirements.lock` 锁定 Python 3.12 的跨平台完整依赖集及下载哈希。更新依赖时，在 Python 3.12 虚拟环境中安装 `uv`，然后重新生成并验证：
+
+```bash
+uv pip compile --universal --python-version 3.12 --generate-hashes --output-file requirements.lock requirements.txt
+python3 -m pip install --require-hashes -r requirements.lock
+python3 -m pip check
+python3 -m unittest discover -s tests -v
+```
+
+`.github/workflows/hol-plugin-scanner.yml` 在 `main` 的 push 和 pull request 上运行 HOL Plugin Scanner，要求分数至少为 80，且没有 high 或 critical 级别发现。所有 Actions 固定到完整提交 SHA；Dependabot 每周检查 Actions 与 Python 依赖更新。
+
+当前适配器使用 MCP SDK 1.x 的 `FastMCP` API，因此依赖范围暂时限制为 `mcp<2`。stdio 冒烟测试验证初始化和工具发现，不访问 Burp 或目标网络。
