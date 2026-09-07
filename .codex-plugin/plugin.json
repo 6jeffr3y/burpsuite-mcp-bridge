@@ -43,5 +43,7 @@
       "创建包含 max_matches 和 ttl 的临时 rewrite rule，完成验证后禁用或删除。",
       "为指定 host 创建一次性 response intercept，处理一个明确字段后核对后续客户端请求。"
     ]
-  }
+  },
+  "scripts": "./mcp-server/",
+  "skills": "./skills/"
 }

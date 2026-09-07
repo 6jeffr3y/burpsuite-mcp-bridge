@@ -1,6 +1,7 @@
 """Verify the locked SDK can start the adapter without a running Burp instance."""
 
 import asyncio
+import json
 import os
 from pathlib import Path
 import sys
@@ -11,6 +12,17 @@ from mcp.client.stdio import stdio_client
 
 
 class StdioSmokeTest(unittest.IsolatedAsyncioTestCase):
+    def test_manifest_declares_runtime_components(self):
+        root = Path(__file__).resolve().parents[1]
+        manifest = json.loads((root / ".codex-plugin" / "plugin.json").read_text())
+        self.assertEqual(manifest["scripts"], "./mcp-server/")
+        self.assertEqual(manifest["skills"], "./skills/")
+        self.assertTrue((root / manifest["scripts"] / "server.py").is_file())
+        self.assertTrue((root / manifest["scripts"] / "requirements.lock").is_file())
+        self.assertTrue(
+            (root / manifest["skills"] / "use-burpsuite-mcp-bridge" / "SKILL.md").is_file()
+        )
+
     async def test_initialize_and_list_tools(self):
         server = Path(__file__).resolve().parents[1] / "mcp-server" / "server.py"
         params = StdioServerParameters(

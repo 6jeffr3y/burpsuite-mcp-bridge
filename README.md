@@ -98,6 +98,7 @@ dist/
   bom.cdx.json
 mcp-server/
   server.py
+  requirements.lock
 skills/
   use-burpsuite-mcp-bridge/
 config-examples/
@@ -134,7 +135,7 @@ Windows、macOS 和 WSL mirrored networking 通常可直接使用 loopback。WSL
 推荐使用 Python 3.12 虚拟环境和跨平台哈希锁文件：
 
 ```bash
-python3 -m pip install --require-hashes -r requirements.lock
+python3 -m pip install --require-hashes -r mcp-server/requirements.lock
 ```
 
 ### 3. 配置 MCP 客户端

@@ -47,10 +47,10 @@ abstraction already represents the operation.
 
 ## Dependency locking and plugin scanning
 
-`requirements.txt` declares the supported dependency range; `requirements.lock` pins the complete cross-platform Python 3.12 dependency set and download hashes. To update dependencies, install `uv` in a Python 3.12 virtual environment, then regenerate and verify the lockfile:
+`requirements.txt` declares the supported dependency range; `mcp-server/requirements.lock` pins the complete cross-platform Python 3.12 dependency set and download hashes. To update dependencies, install `uv` in a Python 3.12 virtual environment, then regenerate and verify the lockfile:
 
 ```bash
-uv pip compile --universal --python-version 3.12 --generate-hashes --output-file requirements.lock requirements.txt
+uv pip compile --universal --python-version 3.12 --generate-hashes --output-file mcp-server/requirements.lock requirements.txt
 python3 -m pip install --require-hashes -r requirements.lock
 python3 -m pip check
 python3 -m unittest discover -s tests -v
@@ -59,3 +59,5 @@ python3 -m unittest discover -s tests -v
 `.github/workflows/hol-plugin-scanner.yml` runs HOL Plugin Scanner on pushes and pull requests targeting `main`, requiring a score of at least 80 and no high or critical findings. All Actions are pinned to full commit SHAs; Dependabot checks Actions and Python dependencies weekly.
 
 The adapter currently uses the MCP SDK 1.x `FastMCP` API, so the dependency range is capped at `mcp<2`. The stdio smoke test verifies initialization and tool discovery without accessing Burp or target networks.
+
+The root `requirements.lock` forwards to the generated lockfile above. The manifest explicitly declares `scripts` and `skills` so catalog generators include the adapter, dependency lock, and operating guide without hand-copied bundles.
