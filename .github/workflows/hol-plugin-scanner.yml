@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
       - name: HOL Plugin Scanner
-        uses: hashgraph-online/ai-plugin-scanner-action@06bfa78ffae51fa0bcadf595b4d4a009bea96e42 # v1; scanner 3.0.113
+        uses: hashgraph-online/ai-plugin-scanner-action@3b453b4c378e72c3d0007f64f77781c469122d6c # v1; scanner 3.0.113
         with:
           plugin_dir: "."
           mode: scan
